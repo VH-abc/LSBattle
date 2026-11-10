@@ -376,12 +376,16 @@ class SolarSystem(object):
             gx += a * dx / r; gy += a * dy / r; gz += a * dz / r
         return (gx, gy, gz), phi
 
-    def max_step(self, Xp):
+    def max_step(self, Xp, U=None):
         """Largest integration step that resolves the local gravity: a small
         fraction of the free-fall time sqrt(r^3/GM) of the dominant body.
         With the midpoint field this keeps the energy error of a close
-        flyby below about 1e-4 of the binding energy per pass."""
+        flyby below about 1e-4 of the binding energy per pass.  Inside a
+        compact body's strong-field region the step is also held to 2% of
+        the distance at the ship's own speed (U = dx/dtau), or a fast pass
+        would cross its closest approach inside one Runge-Kutta step."""
         best = float("inf")
+        umag = (U.x*U.x + U.y*U.y + U.z*U.z) ** 0.5 if U is not None else 0.0
         for star in self.stars.values():
             if star.GM <= 0.0 or star.hp <= 0:
                 continue
@@ -389,19 +393,33 @@ class SolarSystem(object):
             if r > 1.0e30:
                 continue                      # no gravity to speak of out there
             t = 0.005 * r * (r / star.GM) ** 0.5
+            if umag > 0.0 and r < self.STRONG_FIELD * 2.0 * star.GM:
+                t = min(t, 0.02 * r / umag)
             if t < best:
                 best = t
         return best
 
+    NEAR_TIE = 0.10      # bodies within this fraction of the nearest's distance count as tied
+
     def nearest(self, Xp, solid_only=True):
-        best, bd = None, 0.0
+        """The body the ship is closest to (by distance to the surface).  The
+        brake, the orbit brake, the look keys and the HUD highlight all refer
+        to it, so a near-tie is broken by mass: seen from far away a planetary
+        system is its star, not whichever planet happens to be a hair closer
+        (braking to rest relative to a planet orbiting a black hole at 0.3c
+        left the ship moving at 0.3c relative to the hole)."""
+        cands = []
         for star in self.stars.values():
             if star.hp <= 0 or (solid_only and not star.solid):
                 continue
-            d = (star.X - Xp).length() - star.collision_radius
-            if best is None or d < bd:
-                best, bd = star, d
-        return best
+            cands.append(((star.X - Xp).length() - star.collision_radius, star))
+        if not cands:
+            return None
+        dmin = min(d for d, _ in cands)
+        if dmin <= 0.0:
+            return min(cands, key=lambda c: c[0])[1]
+        tied = [c for c in cands if c[0] <= dmin * (1.0 + self.NEAR_TIE)]
+        return max(tied, key=lambda c: (c[1].GM, -c[0]))[1]
 
     def land(self, P, margin, lo=None):
         """Inelastic contact: a ship that reaches a solid body's surface is

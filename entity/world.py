@@ -110,7 +110,7 @@ class World(object):
             remaining = ds
             count = 0
             while remaining > 0.0 and count < self.MAX_SUBSTEPS:
-                dt = min(remaining, self.solar.max_step(self.player.P.X))
+                dt = min(remaining, self.solar.max_step(self.player.P.X, self.player.P.U))
                 self._step(keys, dt)
                 remaining -= dt
                 count += 1
@@ -295,13 +295,17 @@ class World(object):
                 Xc = body.X
                 if body.orbit is not None and BOX.ORBITS:
                     Xc, _ = self.solar.state_at(body, Xp.t - D)
+                # the lens geometry is done in the background frame: pass the
+                # hole's background-frame direction and the ship's boost, both
+                # on the eye axes
                 dX = Xc - Xp
-                dX.t = -dX.length()
-                dx = boost.transform_null(boost.U_of_L(L), dX)
-                v = matrix.get_rotate([dx.x, dx.y, dx.z])
+                v = matrix.get_rotate([dX.x, dX.y, dX.z])
                 n = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]) ** 0.5
+                bn, bu, bg, binv = boost.params(self.player.P.U)
+                ne = matrix.get_rotate([bn[0], bn[1], bn[2]])
                 if n > 0.0:
-                    self.lensing.apply((v[0]/n, v[1]/n, v[2]/n), D, 2.0*body.GM, body.is_hole)
+                    self.lensing.apply((v[0]/n, v[1]/n, v[2]/n), D, 2.0*body.GM, body.is_hole,
+                                       n_eye=(ne[0], ne[1], ne[2]), u=bu, inv=binv)
 
         if BOX.GLARE:
             sky_args = (matrix_i, self.player.P.U, (Xp - sun) if sun is not None else None, weight)
