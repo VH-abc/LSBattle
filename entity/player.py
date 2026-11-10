@@ -159,6 +159,8 @@ class Player(object):
         self.turn_resistivity = script.player.turn_resistivity
         # fine turning (Caps Lock / Shift): no inertia, this fixed rate (rad/s)
         self.fine_turn_rate = 0.08
+        # steady rate the inertial turn settles at: acceleration / damping
+        self.turn_rate = self.turn_acceleration / max(self.turn_resistivity, 1e-9)
         self.collision_radius = script.player.collision_radius*world.scale
         self.landed = None            # body the ship is resting on
         self.collision_radius2 = (script.player.collision_radius*world.scale)**2
@@ -584,11 +586,11 @@ class Player(object):
 
     def change_direction(self, keys, ds):
         matrix = self.quaternion.get_RotMat()
-        if keys.k_fine:
-            # fine control: drop any angular momentum and step at a slow,
-            # fixed rate while a key is held
+        if keys.k_fine or not BOX.INERTIA:
+            # fixed-rate turning, no angular momentum: slow in fine control,
+            # the normal cruising rate when angular inertia is switched off
             self.turn_speed_1 = self.turn_speed_2 = 0.0
-            a = self.fine_turn_rate * ds
+            a = (self.fine_turn_rate if keys.k_fine else self.turn_rate) * ds
             yaw = pitch = 0.0
             if keys.k_turn_right and not keys.k_turn_left:
                 yaw = a
@@ -612,7 +614,7 @@ class Player(object):
                 self.turn_speed_1 -= self.turn_acceleration * ds
             elif keys.k_turn_right:
                 self.turn_speed_1 += self.turn_acceleration * ds
-        if keys.k_fine:
+        if keys.k_fine or not BOX.INERTIA:
             pass
         elif keys.k_turn_priority2 == 0:
             if keys.k_turn_up:

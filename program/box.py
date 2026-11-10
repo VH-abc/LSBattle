@@ -36,6 +36,7 @@ class _Box(object):
         self.CMB = False           # cosmic microwave background in the sky
         self.CROSSHAIR = False     # aiming reticle at the screen centre
         self.LENSING = True        # gravitational light bending near a compact body
+        self.INERTIA = True        # arrow keys accelerate the turn (off: fixed rate, instant stop)
         self.MARKERS = True        # navigation markers (bodies and +x/-x... axes)
         self.GRAVITY = False       # bodies attract the ship (weak-field geodesics)
         self.ORBITS = False        # bodies move on Kepler orbits
@@ -75,7 +76,7 @@ class _Box(object):
                     self.TIME_RATE = float(v)
                 elif w == "IMPULSE_RAPIDITY":
                     self.IMPULSE_RAPIDITY = float(v)
-                elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING"):
+                elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA"):
                     setattr(self, w, (v == "True"))
             if (X, Y) not in disp_sizes:
                 X, Y = disp_sizes[0]
@@ -362,7 +363,7 @@ class _Box(object):
                     k = k.upper()
                     if k in ("ACCEL", "TIME_RATE", "EXPOSURE", "IMPULSE_RAPIDITY"):
                         vals[k] = float(v)
-                    elif k in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING"):
+                    elif k in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA"):
                         vals[k] = v.lower() in ("1", "true", "on", "yes")
                     elif k == "COLOR_MODE":
                         vals[k] = v.upper()
@@ -440,7 +441,7 @@ class _Box(object):
                 f.write("EXPOSURE=%r\n"%self.EXPOSURE)
                 f.write("TIME_RATE=%r\n"%self.TIME_RATE)
                 f.write("IMPULSE_RAPIDITY=%r\n"%self.IMPULSE_RAPIDITY)
-                for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING"):
+                for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA"):
                     f.write("%s=%s\n"%(name, getattr(self, name)))
                 f.close()
             except:
