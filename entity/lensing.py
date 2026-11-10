@@ -78,17 +78,20 @@ void main() {
     float ct = clamp(dot(d, hdir), -1.0, 1.0);
     float th = acos(ct);
     float k = Rs / D;
-    if (shadow > 0.5 && th < 2.598*k) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        return;
-    }
-    // what this pixel shows: in front of the lens -> no bending
+    // what this pixel shows: in front of the lens -> no bending, and no
+    // shadow either (the near side of an accretion disc crosses the shadow)
     float zb = texture2D(depth, uv).r;
     float w = 1.0;
+    bool behind = true;
     if (zb < 0.99999) {
         float zn = 2.0*zb - 1.0;
         float Ds = 2.0*far_*near_ / ((far_ + near_) - zn*(far_ - near_));
         w = clamp((Ds - D) / Ds, 0.0, 1.0);
+        behind = Ds > D;
+    }
+    if (shadow > 0.5 && behind && th < 2.598*k) {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
     }
     vec3 e = d - ct*hdir;
     float el = length(e);

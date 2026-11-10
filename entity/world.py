@@ -319,7 +319,7 @@ class World(object):
         if not BOX.MARKERS:
             self.navmarkers.leader_of = {}
         if BOX.MARKERS:
-            near = self.solar.nearest(Xp)
+            near = self.solar.dominant(Xp)
             self.navmarkers.draw(Xp, L, matrix, near.name.lower() if near is not None else None)
         if BOX.CROSSHAIR:
             self.draw_crosshair()

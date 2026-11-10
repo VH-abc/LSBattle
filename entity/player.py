@@ -217,7 +217,7 @@ class Player(object):
             # seen in the ship's comoving frame gives the thrust direction.
             target = Vector4D(1.0, 0.0, 0.0, 0.0)
             if BOX.ORBITS:
-                body = self.world.solar.nearest(self.P.X)
+                body = self.world.solar.dominant(self.P.X)
                 if body is not None:
                     target = body.U
             rel = Lorentz(self.P.U).get_transform(target)
@@ -232,7 +232,7 @@ class Player(object):
             # current radius, in the sense closest to the present motion:
             # static-frame orbital speed v = sqrt(GM/(r - R_s)) (exact for
             # Schwarzschild; sqrt(GM/r) far out), no orbit inside r = 3GM.
-            body = self.world.solar.nearest(self.P.X)
+            body = self.world.solar.dominant(self.P.X)
             if body is not None and body.GM > 0.0:
                 lo = self.Xlo
                 dx = self.P.X.x - body.X.x + lo[0]; dy = self.P.X.y - body.X.y + lo[1]; dz = self.P.X.z - body.X.z + lo[2]
@@ -496,7 +496,7 @@ class Player(object):
     def look_toward(self, keys, ds):
         """Held look keys drag the view (real time ds) towards a target
         direction in the ship's rest frame:
-          look_body:   where the nearest body appears (its retarded position,
+          look_body:   where the governing body appears (its retarded position,
                        aberrated: the past light cone),
           look_lead:   where to aim light to hit the nearest body if it keeps
                        moving inertially (the future light cone),
@@ -529,7 +529,7 @@ class Player(object):
         elif keys.k_look_motion:
             # own motion relative to the nearest body: in the ship's frame the
             # body moves at -v, so the target is minus the body's velocity
-            body = self.world.solar.nearest(P.X)
+            body = self.world.solar.dominant(P.X)
             if body is None:
                 tx, ty, tz = P.U.x, P.U.y, P.U.z
             else:
@@ -537,7 +537,7 @@ class Player(object):
                 tx, ty, tz = -rel.x, -rel.y, -rel.z
         else:
             solar = self.world.solar
-            body = solar.nearest(P.X)
+            body = solar.dominant(P.X)
             if body is None:
                 return
             Xp = P.X

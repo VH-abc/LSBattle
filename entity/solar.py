@@ -401,6 +401,50 @@ class SolarSystem(object):
 
     NEAR_TIE = 0.10      # bodies within this fraction of the nearest's distance count as tied
 
+    def dominant(self, Xp):
+        """The body whose gravity governs the ship's neighbourhood: the
+        brake, the orbit brake, the look keys and the HUD highlight refer to
+        it.  Found by Hill spheres: start from the root body pulling hardest
+        here, then step into any child whose Hill sphere a (m/3M)^(1/3) the
+        ship is inside, innermost last.  A planet whose Hill sphere is smaller
+        than itself (Ash around Abyss) therefore never takes over: braking
+        "to rest" near it means rest relative to the hole, and at the Moon's
+        distance from Earth the reference is still Earth, though the Sun
+        pulls harder there."""
+        stars = self.stars
+        def ok(b):
+            return b.hp > 0 and b.solid and b.GM > 0.0
+        def primary_of(b):
+            if b.orbit is None:
+                return None
+            p = stars.get(b.orbit[0])
+            return p if p is not None and ok(p) and p.GM > b.GM else None
+        best, bg = None, -1.0
+        for b in stars.values():
+            if not ok(b) or primary_of(b) is not None:
+                continue
+            d = (b.X - Xp).length()
+            g = b.GM / max(d*d, 1e-30)
+            if g > bg:
+                best, bg = b, g
+        if best is None:
+            return self.nearest(Xp)
+        while True:
+            inner, ratio = None, 1.0
+            for b in stars.values():
+                if not ok(b) or primary_of(b) is not best:
+                    continue
+                a = (b.X - best.X).length()
+                if a <= 0.0:
+                    continue
+                r_hill = a * (b.GM / (3.0 * best.GM)) ** (1.0/3.0)
+                d = (b.X - Xp).length()
+                if d < r_hill and d / r_hill < ratio:
+                    inner, ratio = b, d / r_hill
+            if inner is None:
+                return best
+            best = inner
+
     def nearest(self, Xp, solid_only=True):
         """The body the ship is closest to (by distance to the surface).  The
         brake, the orbit brake, the look keys and the HUD highlight all refer
