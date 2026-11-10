@@ -1,0 +1,4 @@
+Game {
+    cheat = True
+    output_script = False
+}

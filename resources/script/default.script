@@ -1,0 +1,1103 @@
+Player {
+    acceleration = 1.5                   # float 0.0<=x<=10.0
+    collision_radius = 0.35              # float 0.0<=x<=1.0
+    hp = 30                              # int 1<=x<=10000000
+    recovery_interval = 3.0              # float 0.0<=x<=100000.0
+    repulsion = 100.0                    # float 0.0<=x<=1000.0
+    resistivity = 0.1                    # float 0.0<=x<=10.0
+    turbo = 3.0                          # float 0.0<=x<=100.0
+    turn_acceleration = 9.0              # float -100.0<=x<=100.0
+    turn_resistivity = 5.0               # float 0.0<=x<=100.0
+    gun_info {
+        format = Weapon: %(NAME)s        # func_str
+        height = 0.04                    # float
+        position_x = 0.68                # float
+        position_y = 0.055               # float
+        color = [1.0, 1.0, 0.9, 0.9]     # color_func
+    }
+    guns {
+        gun {
+            accuracy_condition = 0.0     # float 0.0<=x<=1.0
+            automatic = False            # eval
+            name = Hand Gun              # str
+            power = 1.0                  # float 0.01<=x<=1000.0
+            range = 60.0                 # float 2.0<=x<=1000.0
+            reload_time = 300            # int 1<=x<=100000
+            shoot_position = -0.05       # float -1.0<=x<=1.0
+            speed = 1.0                  # float 0.7<=x<=1.0
+            stage_condition = 0          # int -1<=x<=1000
+            bullet {
+                size = 0.025             # float 0.001<=x<=0.1
+                color = [0.8, 0.8, 0.2, 0.9] # color_func
+            }
+            div = []                     # eval
+            model {
+                name = Hand Gun          # func_str
+                rotation_speed = 0.5     # float
+                size = 0.4               # float 0.01<=x<=10.0
+                color = [1.0, 1.0, 1.0, 1.0] # color_func
+            }
+        }
+        gun {
+            accuracy_condition = 1.0     # float 0.0<=x<=1.0
+            automatic = True             # eval
+            name = Machine Gun           # str
+            power = 1.0                  # float 0.01<=x<=1000.0
+            range = 150.0                # float 2.0<=x<=1000.0
+            reload_time = 100            # int 1<=x<=100000
+            shoot_position = -0.05       # float -1.0<=x<=1.0
+            speed = 1.0                  # float 0.7<=x<=1.0
+            stage_condition = 3          # int -1<=x<=1000
+            bullet {
+                size = 0.02              # float 0.001<=x<=0.1
+                color = [0.8, 0.8, 0.2, 0.9] # color_func
+            }
+            div = []                     # eval
+            model {
+                name = M134              # func_str
+                rotation_speed = 0.5     # float
+                size = 0.4               # float 0.01<=x<=10.0
+                color = [1.0, 1.0, 1.0, 1.0] # color_func
+            }
+        }
+        gun {
+            accuracy_condition = 1.0     # float 0.0<=x<=1.0
+            automatic = True             # eval
+            name = Chainsaw              # str
+            power = 1.0                  # float 0.01<=x<=1000.0
+            range = 80.0                 # float 2.0<=x<=1000.0
+            reload_time = 50             # int 1<=x<=100000
+            shoot_position = -0.05       # float -1.0<=x<=1.0
+            speed = 1.0                  # float 0.7<=x<=1.0
+            stage_condition = 6          # int -1<=x<=1000
+            bullet {
+                size = 0.01              # float 0.001<=x<=0.1
+                color = [0.8, 0.8, 0.2, 0.9] # color_func
+            }
+            div = [3]                    # eval
+            model {
+                name = chainsaw          # func_str
+                rotation_speed = 0.5     # float
+                size = 0.4               # float 0.01<=x<=10.0
+                color = [1.0, 1.0, 1.0, 1.0] # color_func
+            }
+        }
+        gun {
+            accuracy_condition = 1.0     # float 0.0<=x<=1.0
+            automatic = True             # eval
+            name = Shotgun               # str
+            power = 1000.0               # float 0.01<=x<=1000.0
+            range = 75.0                 # float 2.0<=x<=1000.0
+            reload_time = 2000           # int 1<=x<=100000
+            shoot_position = -0.05       # float -1.0<=x<=1.0
+            speed = 1.0                  # float 0.7<=x<=1.0
+            stage_condition = 12         # int -1<=x<=1000
+            bullet {
+                size = 0.025             # float 0.001<=x<=0.1
+                color = [0.8, 0.8, 0.2, 0.9] # color_func
+            }
+            div = [6, 12, 18]            # eval
+            model {
+                name = M26A1             # func_str
+                rotation_speed = 0.5     # float
+                size = 0.4               # float 0.01<=x<=10.0
+                color = [1.0, 1.0, 1.0, 1.0] # color_func
+            }
+        }
+    }
+    hpbar {
+        blood_time = 1.0                 # float
+        length_x = 0.3                   # float
+        length_y = 0.05                  # float
+        position_x = 0.68                # float
+        position_y = 0.05                # float
+        back_color = [0.1, 0.6, 1.0, 0.3] # color_func
+        blood_color = [1.0, 0.0, 0.0, 1.0] # color_func
+        color = [0.0, 0.0, 0.9, 0.5]     # color_func
+    }
+    window {
+        pre_size = 0.025                 # float 0.0001<=x<=0.2
+        size = 0.05                      # float 0.0001<=x<=0.2
+        texture = None                   # func_str
+        texture_dynamic_num = 1          # int
+        color = [1.0, 1.0, 1.0, 1.0]     # color_func
+        pre_color = [0.5, 0.5, 1.0, 1.0] # color_func
+    }
+}
+Game {
+    cheat = True                         # eval
+    continue_num = 3                     # int 0<=x<=100
+    output_script = True                 # eval
+    scale = 0.1                          # float 0.0001<=x<=10.0
+    stage_num = 20                       # int 1<=x<=10000
+    score {
+        accuracy = 5000.0                # float 0.0<=x<=1000000.0
+        accuracy_power = 1.0             # float -2.0<=x<=2.0
+        break_enemy = 100                # int -1000<=x<=1000
+        clear_time = 10000.0             # float 0.0<=x<=1000000.0
+        clear_time_geta = 10.0           # float 0.01<=x<=100000.0
+        clear_time_power = -1.0          # float -2.0<=x<=2.0
+        hit = 10                         # int -1000<=x<=1000
+        hit_by_friend = 30               # int -1000<=x<=1000
+        hp = 10.0                        # float 0.0<=x<=1000000.0
+        hp_power = 1.0                   # float -2.0<=x<=2.0
+        stage_power = 2.0                # float 0.0<=x<=3.0
+    }
+    stage {
+        colosseum_size_a = 0.0           # float 0.0<=x<=10.0
+        colosseum_size_b = 0.0           # float -3.0<=x<=3.0
+        colosseum_size_c = 15.0          # float -100.0<=x<=100.0
+        enemy_num_a = 1.0                # float 0.0<=x<=10.0
+        enemy_num_b = 0.8                # float -3.0<=x<=3.0
+        enemy_num_c = 0.0                # float -100.0<=x<=100.0
+        types_num_a = 1.0                # float 0.0<=x<=10.0
+        types_num_b = 1.0                # float -3.0<=x<=3.0
+        types_num_c = 0.0                # float -100.0<=x<=100.0
+    }
+}
+UI {
+    far_clip = 2000.0                    # float 1.0<=x<=10000000000.0
+    near_clip = 0.01                     # float 1e-05<=x<=100.0  (0.001 ls: lets a planet surface fill the view)
+    backimage {
+        alpha = 0.5                      # float 0.0<=x<=1.0
+        image = youngEinstein.jpg        # func_str
+        image_fill_mode = ALIGN          # _image_fill_mode_func
+        color = [0.4, 0.4, 0.4, 1.0]     # color_func
+        image_color = [1.0, 1.0, 1.0, 1.0] # color_func
+    }
+    font {
+        name = kiloji_b                  # str
+    }
+}
+World {
+    enemy_bullet_num_limit = 1200        # int 100<=x<=100000000
+    player_bullet_num_limit = 1200       # int 100<=x<=100000000
+    sky {
+        rotation0 = 90          # float 0.0<=x<=6.28318530718
+        rotation1 = 30          # float 0.0<=x<=6.28318530718
+        texture0 = milkyway.jpg          # func_str
+        texture1 = milkyway2.jpg         # func_str
+    }
+    solar {
+        center = earth                   # func_str
+        dx = 0.0                         # float
+        dy = -0.5                        # float
+        dz = -3.0                        # float
+        flame {
+            life = 50.0                  # float 0.01<=x<=100.0
+            num = 10                     # int 4<=x<=20
+            size = 0.2                   # float 0.001<=x<=1.0
+            speed = 0.1                  # float 0.1<=x<=0.999
+            color = [1.0, 0.8, 0.8, 0.8] # color_func
+        }
+        stars {
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = MilkyWay             # func_str
+                mass = 0              # kg
+                orbital_phi = 0.0        # float -180<=x<=180
+                orbital_theta = 0.0        # float -90<=x<=90
+                orbital_radius = 0.0 # float 0.0<=x<=1e+50
+                primary_star = SgrA       # func_str
+                sphere_radius = 4.7303652362904e+20  # float 0.0<=x<=1e+50
+                temperature = 5500.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.2        # float 0.0<=x<=1000000.0
+                flattening = 0.92        # float 0.0<=x<=0.95
+                pole_x = -0.8660254037844387
+                pole_y = 0.49999999999999994
+                pole_z = 5.3028761936245346e-17
+                solid = 0
+                texture = milkyway_disc.png      # func_str
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Venus             # func_str
+                mass = 4.867e+24              # kg
+                lit_by = Sun              # func_str
+                orbital_phi = -120.0        # float -180<=x<=180
+                orbital_radius = 108200000000.0 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 6050000.0  # float 0.0<=x<=1e+50
+                texture = venus.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                tilt = 3.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Mars             # func_str
+                mass = 6.417e+23              # kg
+                lit_by = Sun              # func_str
+                orbital_phi = 60.0        # float -180<=x<=180
+                orbital_radius = 227900000000.0 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 3390000.0  # float 0.0<=x<=1e+50
+                texture = mars.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                tilt = 25.0              # float -180<=x<=180
+            }
+            star {
+                hp = 5000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Jupiter             # func_str
+                mass = 1.898e+27              # kg
+                lit_by = Sun              # func_str
+                orbital_phi = 150.0        # float -180<=x<=180
+                orbital_theta = 8.0        # float -90<=x<=90
+                orbital_radius = 778500000000.0 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 69900000.0  # float 0.0<=x<=1e+50
+                texture = jupiter.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                tilt = 3.0              # float -180<=x<=180
+            }
+            star {
+                hp = 5000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Saturn             # func_str
+                mass = 5.683e+26              # kg
+                lit_by = Sun              # func_str
+                orbital_phi = -40.0        # float -180<=x<=180
+                orbital_theta = -12.0        # float -90<=x<=90
+                orbital_radius = 1434000000000.0 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 58200000.0  # float 0.0<=x<=1e+50
+                texture = saturn.png      # func_str
+                ring = saturn_ring.png    # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                tilt = 27.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = NeutronStar        # func_str
+                mass = 2.8e30            # kg (1.4 solar masses)
+                orbital_phi = 110.0        # float -180<=x<=180
+                orbital_theta = 15.0        # float -90<=x<=90
+                orbital_radius = 3.784e18 # 400 light-years: RX J1856.5-3754, the nearest known neutron star
+                primary_star = Sun       # func_str
+                sphere_radius = 10000.0  # 10 km
+                texture = sun_white.png      # func_str
+                temperature = 1000000.0        # float 100.0<=x<=1000000000.0
+                brightness = 1400.0        # Planck(1e6 K)/Planck(5778 K) x the Sun, in sRGB units
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Forge        # a 205-thousand-solar-mass star of three Schwarzschild radii, made for preset 3 (surface gravity a quarter of the thrust)
+                mass = 4.083e+35            # kg
+                orbital_phi = -40.0        # float -180<=x<=180
+                orbital_theta = 35.0        # float -90<=x<=90
+                orbital_radius = 1.135e19 # 1200 light-years
+                primary_star = Sun       # func_str
+                sphere_radius = 1.81922e+09  # m: 2.62 solar radii, three Schwarzschild radii
+                texture = sun_white.png      # func_str
+                temperature = 30000.0        # float 100.0<=x<=1000000000.0
+                brightness = 400.0        # roughly Planck(30000 K)/Planck(5778 K) x the Sun, in sRGB units
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Cinder             # Forge's planet at three stellar radii (nine Schwarzschild radii), 0.24c, period 485 s
+                mass = 1.0e23              # kg
+                lit_by = Forge              # func_str
+                orbital_phi = 0.0        # float -180<=x<=180
+                orbital_radius = 5.45766e+09 # m
+                primary_star = Forge       # func_str
+                sphere_radius = 2000000.0  # 2000 km
+                texture = mars.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                tilt = 10.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Helios        # a Sun twin 2000 light-years out with eight planets, made for preset 5
+                mass = 1.989e+30              # kg
+                orbital_phi = 75.0        # float -180<=x<=180
+                orbital_theta = -30.0        # float -90<=x<=90
+                orbital_radius = 1.892e19 # 2000 light-years
+                primary_star = Sun       # func_str
+                sphere_radius = 695500000 # m
+                texture = sun_white.png        # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 132.0        # as the Sun
+                tilt = 0.0               # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Ember             # Helios planet at 7 stellar radii (0.033 AU), period 2.1 d
+                mass = 3e+23              # kg
+                lit_by = Helios              # func_str
+                orbital_phi = 20.0        # float -180<=x<=180
+                orbital_radius = 4.87335e+09 # m
+                primary_star = Helios       # func_str
+                sphere_radius = 3e+06  # m
+                texture = mars.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 40.0
+                tilt = 5.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Soot             # Helios planet at 14 stellar radii (0.065 AU), period 6.1 d
+                mass = 4e+24              # kg
+                lit_by = Helios              # func_str
+                orbital_phi = -70.0        # float -180<=x<=180
+                orbital_radius = 9.7467e+09 # m
+                primary_star = Helios       # func_str
+                sphere_radius = 6e+06  # m
+                texture = venus.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 110.0
+                tilt = 2.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Quartz             # Helios planet at 28 stellar radii (0.130 AU), period 17.2 d
+                mass = 1.5e+23              # kg
+                lit_by = Helios              # func_str
+                orbital_phi = 140.0        # float -180<=x<=180
+                orbital_radius = 1.94934e+10 # m
+                primary_star = Helios       # func_str
+                sphere_radius = 2.2e+06  # m
+                texture = mars.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 200.0
+                tilt = 30.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Lagoon             # Helios planet at 56 stellar radii (0.261 AU), period 48.6 d
+                mass = 5.5e+24              # kg
+                lit_by = Helios              # func_str
+                orbital_phi = -150.0        # float -180<=x<=180
+                orbital_radius = 3.89868e+10 # m
+                primary_star = Helios       # func_str
+                sphere_radius = 6.5e+06  # m
+                texture = venus.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 300.0
+                tilt = 24.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Colossus             # Helios planet at 112 stellar radii (0.521 AU), period 137.4 d
+                mass = 2e+27              # kg
+                lit_by = Helios              # func_str
+                orbital_phi = 60.0        # float -180<=x<=180
+                orbital_radius = 7.79736e+10 # m
+                primary_star = Helios       # func_str
+                sphere_radius = 7e+07  # m
+                texture = jupiter.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 60.0
+                tilt = 3.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Halo             # Helios planet at 224 stellar radii (1.042 AU), period 388.7 d
+                mass = 5e+26              # kg
+                lit_by = Helios              # func_str
+                orbital_phi = -20.0        # float -180<=x<=180
+                orbital_radius = 1.55947e+11 # m
+                primary_star = Helios       # func_str
+                sphere_radius = 5.5e+07  # m
+                texture = saturn.png      # func_str
+                ring = saturn_ring.png    # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 0.0
+                tilt = 27.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Frost             # Helios planet at 448 stellar radii (2.085 AU), period 1099.4 d
+                mass = 1e+26              # kg
+                lit_by = Helios              # func_str
+                orbital_phi = 100.0        # float -180<=x<=180
+                orbital_radius = 3.11894e+11 # m
+                primary_star = Helios       # func_str
+                sphere_radius = 2.5e+07  # m
+                texture = saturn.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 150.0
+                tilt = 98.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Rime             # Helios planet at 897 stellar radii (4.170 AU), period 3109.7 d
+                mass = 1e+23              # kg
+                lit_by = Helios              # func_str
+                orbital_phi = -110.0        # float -180<=x<=180
+                orbital_radius = 6.23788e+11 # m
+                primary_star = Helios       # func_str
+                sphere_radius = 1.8e+06  # m
+                texture = mars.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 250.0
+                tilt = 10.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Abyss        # a 280,000-solar-mass black hole with planets on relativistic orbits, made for preset 6
+                mass = 5.574e+35            # kg
+                orbital_phi = 150.0        # float -180<=x<=180
+                orbital_theta = 10.0        # float -90<=x<=90
+                orbital_radius = 2.366e19 # 2500 light-years
+                primary_star = Sun       # func_str
+                sphere_radius = 8.27782e+08  # Schwarzschild radius, m
+                texture = black.png      # func_str
+                temperature = 100.0        # float 100.0<=x<=1000000000.0
+                brightness = 0.0        # nothing escapes
+                disk_inner = 3.0         # accretion disc, in Schwarzschild radii
+                disk_outer = 4.5
+                disk_temperature = 20000.0
+                disk_brightness = 4.0
+                tilt = 20.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Ash             # Abyss planet at 5.5 Schwarzschild radii, period 316 s, 0.30c
+                mass = 2e+23              # kg
+                lit_by = Abyss              # func_str
+                orbital_phi = 0.0        # float -180<=x<=180
+                orbital_radius = 4.5528e+09 # m
+                primary_star = Abyss       # func_str
+                sphere_radius = 3e+06  # m
+                texture = mars.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 30.0
+                tilt = 15.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Tar             # Abyss planet at 11.0 Schwarzschild radii, period 895 s, 0.21c
+                mass = 6e+23              # kg
+                lit_by = Abyss              # func_str
+                orbital_phi = 130.0        # float -180<=x<=180
+                orbital_radius = 9.1056e+09 # m
+                primary_star = Abyss       # func_str
+                sphere_radius = 4.5e+06  # m
+                texture = venus.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 120.0
+                tilt = 5.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Slag             # Abyss planet at 22.0 Schwarzschild radii, period 2532 s, 0.15c
+                mass = 8e+22              # kg
+                lit_by = Abyss              # func_str
+                orbital_phi = -100.0        # float -180<=x<=180
+                orbital_radius = 1.82112e+10 # m
+                primary_star = Abyss       # func_str
+                sphere_radius = 2e+06  # m
+                texture = mars.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 220.0
+                tilt = 40.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = BlackHole        # Gaia BH1, the nearest known stellar-mass black hole
+                mass = 1.91e31            # kg (9.6 solar masses)
+                orbital_phi = -150.0        # float -180<=x<=180
+                orbital_theta = -20.0        # float -90<=x<=90
+                orbital_radius = 1.476e19 # 1560 light-years
+                primary_star = Sun       # func_str
+                sphere_radius = 28360.0  # Schwarzschild radius of 9.6 solar masses, m
+                texture = black.png      # func_str
+                temperature = 100.0        # float 100.0<=x<=1000000000.0
+                brightness = 0.0        # nothing escapes
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Proxima             # func_str
+                mass = 2.428e+29              # kg
+                orbital_phi = 20.0        # float -180<=x<=180
+                orbital_theta = -25.0        # float -90<=x<=90
+                orbital_radius = 4.011349720374259e+16 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 107000000.0  # float 0.0<=x<=1e+50
+                texture = proxima.png      # func_str
+                temperature = 3042.0        # float 100.0<=x<=1000000000.0
+                brightness = 20.0        # float 0.0<=x<=1000000.0
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Sirius             # func_str
+                mass = 4.02e+30              # kg
+                orbital_phi = -75.0        # float -180<=x<=180
+                orbital_theta = 40.0        # float -90<=x<=90
+                orbital_radius = 8.136228206419488e+16 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 1190000000.0  # float 0.0<=x<=1e+50
+                texture = sirius.png      # func_str
+                temperature = 9940.0        # float 100.0<=x<=1000000000.0
+                brightness = 300.0        # float 0.0<=x<=1000000.0
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Betelgeuse             # func_str
+                mass = 3.3e+31              # kg
+                orbital_phi = 110.0        # float -180<=x<=180
+                orbital_theta = 15.0        # float -90<=x<=90
+                orbital_radius = 5.184480298974279e+18 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 617000000000.0  # float 0.0<=x<=1e+50
+                texture = betelgeuse.png      # func_str
+                temperature = 3600.0        # float 100.0<=x<=1000000000.0
+                brightness = 100.0        # float 0.0<=x<=1000000.0
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = SgrA             # Sagittarius A*
+                mass = 8.26e+36              # kg (4.15 million solar masses)
+                orbital_phi = 180.0        # float -180<=x<=180
+                orbital_theta = 0.0        # float -90<=x<=90
+                orbital_radius = 2.459789922871008e+20 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 1.227e+10  # Schwarzschild radius, m (41 light-seconds)
+                texture = black.png      # func_str
+                temperature = 100.0        # float 100.0<=x<=1000000000.0
+                brightness = 0.0        # the horizon
+                pole_x = -0.8660254037844387
+                pole_y = 0.49999999999999994
+                pole_z = 5.3028761936245346e-17
+                disk_inner = 3.0         # innermost stable orbit, in Schwarzschild radii
+                disk_outer = 14.0        # Schwarzschild radii
+                disk_temperature = 14000.0   # K at the inner edge, falling as r^-3/4
+                disk_brightness = 6.0        # sRGB units at the inner edge
+                solid = 1
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Andromeda             # func_str
+                mass = 0              # kg
+                orbital_phi = -140.0        # float -180<=x<=180
+                orbital_theta = 55.0        # float -90<=x<=90
+                orbital_radius = 2.3651826181452e+22 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 5e+20  # float 0.0<=x<=1e+50
+                texture = andromeda.png      # func_str
+                temperature = 5500.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.4        # float 0.0<=x<=1000000.0
+                flattening = 0.75        # float 0.0<=x<=0.95
+                solid = 0
+                tilt = 70.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Earth             # func_str
+                mass = 5.972e+24              # kg
+                lit_by = Sun              # func_str
+                orbital_phi = 0.0        # float -180<=x<=180
+                orbital_radius = 149597870700 # float 0.0<=x<=1e+50
+                primary_star = Sun       # func_str
+                sphere_radius = 6378000  # float 0.0<=x<=1e+50
+                texture = earth.jpg      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 270.0             # longitude facing +x: the Americas face the spawn point
+                tilt = 23.4              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Sun               # func_str
+                mass = 1.989e+30              # kg
+                orbital_phi = 0.0        # float -180<=x<=180
+                orbital_radius = 0       # float 0.0<=x<=1e+50
+                primary_star = None      # func_str
+                sphere_radius = 695500000 # float 0.0<=x<=1e+50
+                texture = sun_white.png        # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 132.0        # sRGB units; = (R_sun/1AU)^(-2/2.2): sunlit white at 1 AU = display white  # float 0.0<=x<=1000000.0
+                tilt = 0.0               # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Moon              # func_str
+                mass = 7.342e+22              # kg
+                lit_by = Sun              # func_str
+                orbital_phi = 180.0      # float -180<=x<=180
+                orbital_radius = 384400000 # float 0.0<=x<=1e+50
+                primary_star = Earth     # func_str
+                sphere_radius = 1738000  # float 0.0<=x<=1e+50
+                texture = moon.jpg       # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                tilt = 0.0               # float -180<=x<=180
+            }
+        }
+    }
+    wireframe {
+        div = 5                          # int 2<=x<=100
+        inner_div = 20                   # int 1<=x<=100
+        line_width = 1                   # int 1<=x<=100
+        range = 250.0                    # float 1.0<=x<=10000.0
+        color = [0.4, 0.4, 0.4, 1.0]     # color_func
+    }
+}
+Enemy {
+    repulsion = 100.0                    # float 0.0<=x<=1000.0
+    bullet {
+        size = 0.02                      # float 0.001<=x<=0.1
+        color = [1.0, 0.0, 1.0, 1.0]     # color_func
+    }
+    characters {
+        character {
+            acceleration = 4.0          # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.75          # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 1                       # int 1<=x<=10000000
+            name = reimu                 # str
+            resistivity = 8.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.02         # float 0.0<=x<=1.0
+            shoot_interval = 0.5         # float
+            size = 0.9                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = []               # eval
+            think {
+                distance0 = 4.0          # float
+                distance1 = 10.0         # float
+                far_n = 1.0              # float
+                far_p = 0.0              # float
+                near_n = 0.2             # float
+                near_p = 0.0             # float
+                zgzg_interval = 1.0      # float
+            }
+        }
+        character {
+            acceleration = 2.4           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.7           # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 2                       # int 1<=x<=10000000
+            name = dorake                # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.02         # float 0.0<=x<=1.0
+            shoot_interval = 0.8         # float
+            size = 1.0                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = []               # eval
+            think {
+                distance0 = 4.0          # float
+                distance1 = 10.0         # float
+                far_n = 1.0              # float
+                far_p = 0.0              # float
+                near_n = -0.2            # float
+                near_p = 0.0             # float
+                zgzg_interval = 3.0      # float
+            }
+        }
+        character {
+            acceleration = 2.0           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.75          # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 1                       # int 1<=x<=10000000
+            name = marisa                # str
+            resistivity = 3.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.02         # float 0.0<=x<=1.0
+            shoot_interval = 0.5         # float
+            size = 0.9                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = []               # eval
+            think {
+                distance0 = 10.0         # float
+                distance1 = 15.0         # float
+                far_n = 1.0              # float
+                far_p = 0.1              # float
+                near_n = 0.1             # float
+                near_p = 0.2             # float
+                zgzg_interval = 1.0      # float
+            }
+        }
+        character {
+            acceleration = 1.8           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.85          # float 0.5<=x<=0.99999
+            collision_radius = 1.0       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.5 # float 0.0<=x<=1.0
+            hp = 10                      # int 1<=x<=10000000
+            name = kuma                  # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.05         # float 0.0<=x<=1.0
+            shoot_interval = 1.0         # float
+            size = 2.2                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [6]              # eval
+            think {
+                distance0 = 8.0          # float
+                distance1 = 16.0         # float
+                far_n = 1.0              # float
+                far_p = 0.1              # float
+                near_n = 0.1             # float
+                near_p = 0.2             # float
+                zgzg_interval = 100.0    # float
+            }
+        }
+        character {
+            acceleration = 1.5           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.9           # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 8                       # int 1<=x<=10000000
+            name = buta                  # str
+            resistivity = 1.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.05         # float 0.0<=x<=1.0
+            shoot_interval = 0.8         # float
+            size = 1.5                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [4]              # eval
+            think {
+                distance0 = 4.0          # float
+                distance1 = 10.0         # float
+                far_n = 2.0              # float
+                far_p = 0.1              # float
+                near_n = 0.0             # float
+                near_p = 1.0             # float
+                zgzg_interval = 3.0      # float
+            }
+        }
+        character {
+            acceleration = 4.0           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.9           # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 5                       # int 1<=x<=10000000
+            name = medaka                # str
+            resistivity = 0.8            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.02         # float 0.0<=x<=1.0
+            shoot_interval = 1.5         # float
+            size = 0.9                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = []               # eval
+            think {
+                distance0 = 4.0          # float
+                distance1 = 10.0         # float
+                far_n = 1.0              # float
+                far_p = 0.0              # float
+                near_n = -0.2            # float
+                near_p = 0.0             # float
+                zgzg_interval = 3.0      # float
+            }
+        }
+        character {
+            acceleration = 3.6           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.95          # float 0.5<=x<=0.99999
+            collision_radius = 1.0       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.5 # float 0.0<=x<=1.0
+            hp = 15                      # int 1<=x<=10000000
+            name = Manticore             # str
+            resistivity = 3.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.02         # float 0.0<=x<=1.0
+            shoot_interval = 0.6         # float
+            size = 2.4                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [3]              # eval
+            think {
+                distance0 = 4.0          # float
+                distance1 = 10.0         # float
+                far_n = 1.0              # float
+                far_p = 0.1              # float
+                near_n = 0.1             # float
+                near_p = 0.2             # float
+                zgzg_interval = 1.0      # float
+            }
+        }
+        character {
+            acceleration = 5.6           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.85          # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 5                       # int 1<=x<=10000000
+            name = allosaurus            # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.02         # float 0.0<=x<=1.0
+            shoot_interval = 0.2         # float
+            size = 3.0                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [3]              # eval
+            think {
+                distance0 = 4.0          # float
+                distance1 = 10.0         # float
+                far_n = 2.0              # float
+                far_p = 0.1              # float
+                near_n = 0.0             # float
+                near_p = 0.2             # float
+                zgzg_interval = 3.0      # float
+            }
+        }
+        character {
+            acceleration = 10.0          # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.999         # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 5                       # int 1<=x<=10000000
+            name = Griffin               # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.02         # float 0.0<=x<=1.0
+            shoot_interval = 0.3         # float
+            size = 2.4                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [4]              # eval
+            think {
+                distance0 = 4.0          # float
+                distance1 = 10.0         # float
+                far_n = 1.0              # float
+                far_p = 0.1              # float
+                near_n = 0.1             # float
+                near_p = 0.2             # float
+                zgzg_interval = 5.0      # float
+            }
+        }
+        character {
+            acceleration = 6.0           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.99          # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 40                      # int 1<=x<=10000000
+            name = gargoyle              # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.02         # float 0.0<=x<=1.0
+            shoot_interval = 0.5         # float
+            size = 2.0                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [4]              # eval
+            think {
+                distance0 = 2.0          # float
+                distance1 = 4.0          # float
+                far_n = -0.1             # float
+                far_p = 0.01             # float
+                near_n = -1.0            # float
+                near_p = 0.01            # float
+                zgzg_interval = 3.0      # float
+            }
+        }
+        character {
+            acceleration = 2.0           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.9           # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 5                       # int 1<=x<=10000000
+            name = Medusa                # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.03         # float 0.0<=x<=1.0
+            shoot_interval = 0.1         # float
+            size = 3.0                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [4, 8]           # eval
+            think {
+                distance0 = 2.0          # float
+                distance1 = 4.0          # float
+                far_n = -0.07            # float
+                far_p = 1.0              # float
+                near_n = -0.5            # float
+                near_p = 0.01            # float
+                zgzg_interval = 5.0      # float
+            }
+        }
+        character {
+            acceleration = 8.0           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.99          # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 30                      # int 1<=x<=10000000
+            name = minotaurus            # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.02         # float 0.0<=x<=1.0
+            shoot_interval = 0.3         # float
+            size = 4.0                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [8]              # eval
+            think {
+                distance0 = 4.0          # float
+                distance1 = 10.0         # float
+                far_n = 2.0              # float
+                far_p = 0.1              # float
+                near_n = 0.0             # float
+                near_p = 0.2             # float
+                zgzg_interval = 3.0      # float
+            }
+        }
+        character {
+            acceleration = 2.0           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.99          # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 100                     # int 1<=x<=10000000
+            name = Golem                 # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.08         # float 0.0<=x<=1.0
+            shoot_interval = 0.5         # float
+            size = 6.0                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [4, 8]           # eval
+            think {
+                distance0 = 3.0          # float
+                distance1 = 4.0          # float
+                far_n = -0.07            # float
+                far_p = 0.01             # float
+                near_n = -0.5            # float
+                near_p = 0.01            # float
+                zgzg_interval = 5.0      # float
+            }
+        }
+        character {
+            acceleration = 10.0          # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.99          # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 30                      # int 1<=x<=10000000
+            name = Phoenix               # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.06         # float 0.0<=x<=1.0
+            shoot_interval = 0.3         # float
+            size = 4.0                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [8]              # eval
+            think {
+                distance0 = 3.0          # float
+                distance1 = 4.0          # float
+                far_n = -0.1             # float
+                far_p = 0.01             # float
+                near_n = -1.0            # float
+                near_p = 0.01            # float
+                zgzg_interval = 3.0      # float
+            }
+        }
+        character {
+            acceleration = 10.0          # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.99          # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 30                      # int 1<=x<=10000000
+            name = wyvern                # str
+            resistivity = 2.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.015        # float 0.0<=x<=1.0
+            shoot_interval = 0.3         # float
+            size = 6.0                   # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [4, 6]           # eval
+            think {
+                distance0 = 4.0          # float
+                distance1 = 10.0         # float
+                far_n = 2.0              # float
+                far_p = 0.1              # float
+                near_n = 0.0             # float
+                near_p = 0.2             # float
+                zgzg_interval = 3.0      # float
+            }
+        }
+        character {
+            acceleration = 2.0           # float 0.0<=x<=10.0
+            bullet_range = 200.0         # float 1.0<=x<=1000.0
+            bullet_speed = 0.99999       # float 0.5<=x<=0.99999
+            collision_radius = 0.5       # float 0.0<=x<=1.0
+            collision_radius_by_friend = 0.25 # float 0.0<=x<=1.0
+            hp = 200                     # int 1<=x<=10000000
+            name = bos                   # str
+            resistivity = 3.0            # float 0.0<=x<=10.0
+            shoot_div_phi = 0.03         # float 0.0<=x<=1.0
+            shoot_interval = 0.1         # float
+            size = 10.0                  # float 0.1<=x<=1000.0
+            color = [1.0, 1.0, 1.0, 1.0] # color_func
+            shoot_div = [6, 8, 10]       # eval
+            think {
+                distance0 = 10.0         # float
+                distance1 = 15.0         # float
+                far_n = 1.0              # float
+                far_p = 0.1              # float
+                near_n = 0.1             # float
+                near_p = 0.2             # float
+                zgzg_interval = 1.0      # float
+            }
+        }
+    }
+    flame {
+        life = 6.0                       # float 0.01<=x<=100.0
+        num = 10                         # int 4<=x<=20
+        size = 0.3                       # float 0.001<=x<=1.0
+        speed = 0.4                      # float 0.1<=x<=0.999
+        color = [1.0, 1.0, 1.0, 0.8]     # color_func
+    }
+    hpbar {
+        length = 1.0                     # float 0.01<=x<=100.0
+        length_parhp = 0.25              # float 0.01<=x<=1.0
+        position = 0.6                   # float -1.0<=x<=1.0
+        visible = True                   # eval
+        width = 0.15                     # float 0.01<=x<=0.2
+        back_color = [0.0, 0.5, 0.0, 0.2] # color_func
+        bar_color = [0.0, 0.5, 0.0, 0.6] # color_func
+    }
+    timer {
+        format = %0.fs                   # str
+        position = 0.8                   # float -3.0<=x<=3.0
+        size = 0.25                      # float 0.01<=x<=1.0
+        visible = True                   # eval
+        color = [1.0, 1.0, 1.0, 1.0]     # color_func
+    }
+}

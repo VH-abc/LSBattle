@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+error.log
+resources/img/accretion_ring*.gpo
+resources/config/setting.ini
+build/
