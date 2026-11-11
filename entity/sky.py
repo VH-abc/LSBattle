@@ -11,6 +11,7 @@ from program.utils import load_texture, compile_program, search_imagefile
 from program.const import IMG_DIR, VIEW_ANGLE
 from program import script
 from program.utils import blackbody, boost
+from program.utils.lensing import Lensing, GLSL as LENS_GLSL
 
 
 GAME_COLOUR = """
@@ -83,14 +84,17 @@ class Sky(object):
         texture_name0 = search_imagefile(script.world.sky.texture0)
         self.texture_id0 = load_texture(texture_name0)
         self.texture_id_deep = load_texture(search_imagefile("deepsky.png"))
+        self.tex_h = (float(load_texture(texture_name0, id_only=False).height),
+                      float(load_texture(search_imagefile("deepsky.png"), id_only=False).height))
         # texture_name1 = search_imagefile(script.world.sky.texture1)
         # self.texture_id1 = load_texture(texture_name1)
 
-    def init_vertex(self):
-        angle = VIEW_ANGLE*pi/180
+    def init_vertex(self, fov=None):
+        self.quad_fov = fov if fov else VIEW_ANGLE
+        # a quad just past the frame's corners at this (vertical) field of view
         z = -1.0
-        x = tan(angle) * abs(z)
-        y = x * BOX.Y / BOX.X
+        y = 1.02 * tan(0.5*self.quad_fov*pi/180) * abs(z)
+        x = y * BOX.X / BOX.Y
         vertex = [ x,  y, z,
                   -x,  y, z,
                   -x, -y, z,
@@ -127,6 +131,7 @@ class Sky(object):
             extra = CMB_GAME
         self.program = compile_program(vs, """
         #version 120
+        #extension GL_ARB_shader_texture_lod : enable
         varying vec3 pos;
         uniform mat4 view_i;    // eye -> comoving rest frame (rotation)
         uniform mat4 skyrot;    // background frame -> sky texture frame (rotation)
@@ -138,8 +143,9 @@ class Sky(object):
         uniform sampler2D texture_deep;
         uniform float cmb_on;   // 1: draw the cosmic microwave background
         uniform float cmb_T;    // its temperature (K)
+        uniform vec2 tex_h;     // heights (texels) of the panorama and deep-sky maps
         uniform vec3 cmb_scale; // linear radiance scale: Sun-white at 5778 K
-        """ + boost.GLSL + extra + """
+        """ + boost.GLSL + LENS_GLSL + extra + """
         void main() {
             vec3 d = normalize((view_i * vec4(pos, 0.0)).xyz);
             // photon direction in the background frame: Lorentz(-U) (d, -1)
@@ -148,6 +154,10 @@ class Sky(object):
             // The background is a sphere of finite radius around the Sun, so the
             // texture direction depends on where the player is (parallax).
             vec3 dl0 = normalize(Xi.xyz);
+            if (lens_k > 0.0) {
+                dl0 = lens_source(dl0);    // bent round the lens
+                if (dot(dl0, dl0) < 0.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }   // a black hole's shadow
+            }
             vec3 dl = dl0;
             float pd = dot(sky_p, dl);
             float disc = pd*pd + sky_R*sky_R - dot(sky_p, sky_p);
@@ -156,17 +166,23 @@ class Sky(object):
                 dl = normalize(sky_p + sdist*dl);
             }
             dl = (skyrot * vec4(dl, 0.0)).xyz;
+            // mip level from the angle one pixel spans on the sky, the same
+            // in every direction: the implicit level, taken from texture
+            // coordinates, blows up at the map's poles and smears them
+            float apx = max(length(dFdx(dl0)), length(dFdy(dl0)));
+            float lod0 = log2(max(apx * tex_h.x * 0.31830988618379067, 1e-6));
+            float lodd = log2(max(apx * tex_h.y * 0.31830988618379067, 1e-6));
             float s, t;
             s = atan(dl.y, dl.x) * 0.15915494309189533;
             if (s < 0.0) s += 1.0;
             t = 1.0 - atan(length(dl.xy), dl.z) * 0.31830988618379067;
-            vec4 color = texture2D(texture0, vec2(s, t)) * sky_w;
+            vec4 color = texture2DLod(texture0, vec2(s, t), lod0) * sky_w;
             // extragalactic background, truly at infinity
             vec3 dd = (skyrot * vec4(dl0, 0.0)).xyz;
             s = atan(dd.y, dd.x) * 0.15915494309189533;
             if (s < 0.0) s += 1.0;
             t = 1.0 - atan(length(dd.xy), dd.z) * 0.31830988618379067;
-            color += texture2D(texture_deep, vec2(s, t)) * (1.0 - 0.6*sky_w);
+            color += texture2DLod(texture_deep, vec2(s, t), lodd) * (1.0 - 0.6*sky_w);
             """ + colour + """
         }
         """)
@@ -181,6 +197,7 @@ class Sky(object):
         self.cmb_on_local = glGetUniformLocation(self.program, "cmb_on")
         self.cmb_T_local = glGetUniformLocation(self.program, "cmb_T")
         self.cmb_scale_local = glGetUniformLocation(self.program, "cmb_scale")
+        self.texh_local = glGetUniformLocation(self.program, "tex_h")
         # Normalise so that a blackbody at the Sun's temperature renders with
         # the Sun's surface brightness (the Sun is a white texture times its
         # script brightness, in sRGB units, before the gamma curve).
@@ -193,7 +210,7 @@ class Sky(object):
         lin = b_sun ** 2.2
         self.cmb_scale = tuple(lin / max(c, 1e-9) for c in pr)
 
-    def draw(self, pm, U, player_rel=None, weight=1.0, scale=1.0, gshift=1.0):
+    def draw(self, pm, U, player_rel=None, weight=1.0, scale=1.0, gshift=1.0, fov=None):
         """pm: inverse view rotation (eye -> rest frame); U: player's 4-velocity;
         player_rel: player position relative to the sky-sphere centre (Vector4D);
         weight: 1 inside the galaxy (panorama shown), 0 far outside.
@@ -201,6 +218,8 @@ class Sky(object):
         path has no radiometric meaning, so it draws nothing when scaled."""
         if scale != 1.0 and not self.accurate:
             return
+        if (fov if fov else VIEW_ANGLE) != getattr(self, "quad_fov", VIEW_ANGLE):
+            self.init_vertex(fov)
         glUseProgram(self.program)
         glUniform1f(self.skyw_local, weight)
         glActiveTexture(GL_TEXTURE3)
@@ -211,6 +230,7 @@ class Sky(object):
         else:
             glUniform3f(self.skyp_local, player_rel.x, player_rel.y, player_rel.z)
         glUniform1f(self.skyR_local, SKY_RADIUS)
+        glUniform2f(self.texh_local, *self.tex_h)
         glUniform1f(self.gobs_local, gshift)
         glUniform1f(self.cmb_on_local, 1.0 if BOX.CMB else 0.0)
         glUniform1f(self.cmb_T_local, T_CMB)
@@ -221,6 +241,7 @@ class Sky(object):
         glUniformMatrix4fv(self.view_local, 1, GL_FALSE, pm.to_glsl())
         glUniformMatrix4fv(self.rot_local, 1, GL_FALSE, self.m.to_glsl())
         boost.set_uniforms(self.program, U)
+        Lensing.set_uniforms(self.program, table_unit=4)
         if self.accurate:
             # ucolor-style scaling acts before the gamma curve: scale^2.2 in linear
             blackbody.set_uniforms(self.program, BOX.EXPOSURE * scale ** 2.2)

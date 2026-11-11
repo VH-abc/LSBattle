@@ -8,6 +8,7 @@ from go import Vector4D, Matrix44, Lorentz
 from model.mqo.mqo2gpo import mqo2gpo
 from program.utils import load_texture, search_imagefile, compile_program
 from program.utils import blackbody, boost
+from program.utils.lensing import Lensing, GLSL as LENS_GLSL
 from program.box import BOX
 
 
@@ -114,7 +115,8 @@ uniform float light_on;  // 0: self-luminous, 1: sphere (Lambert), 2: thin disc 
 uniform float g_shift;   // gravitational redshift factor of the emitter (1 = none)
 uniform float disc_Rs;   // >0: accretion disc; mesh units per Schwarzschild radius
 uniform float disc_spin; // +1 / -1: sense of rotation about the mesh +y axis
-""" + boost.GLSL + """
+uniform float lens_w;    // fraction of the lens deflection this body sees (0: none)
+""" + boost.GLSL + LENS_GLSL + """
 varying float ratio;
 varying float shade;
 void main() {
@@ -154,7 +156,13 @@ void main() {
         dv = sqrt(1.0 - sp*sp) / (1.0 - sp * dot(tang, to_player));
     }
     ratio = g_shift * dv * t1 / (-rho);
-    gl_Position = gl_ModelViewProjectionMatrix * vec4(v_perp + vpar1*rb_n, 1.0);
+    vec3 P = v_perp + vpar1*rb_n;
+    if (lens_w > 0.0 && lens_k > 0.0) {
+        // beyond a lens: the vertex is seen where its primary image is
+        float dist = length(P);
+        if (dist > 0.0) P = lens_to_ship(lens_apparent(lens_to_lab(P / dist), lens_w)) * dist;
+    }
+    gl_Position = gl_ModelViewProjectionMatrix * vec4(P, 1.0);
     %s
 }
 """
@@ -218,9 +226,13 @@ varying float shade;
 void main() {
     %s
     color.rgb *= pow(shade, 1.0 / 2.2);     // shade is linear; colour is sRGB-encoded here
-    if (bb_logT0 > 0.0) {
+    if (bb_logT0 > 0.0 && bb_lit > 0.5) {
+        // lit surface: albedo under a Planck illuminant, shifted as a spectrum
         gl_FragColor = vec4(doppler_spectral(color.rgb, ratio, exposure), color.a);
     } else {
+        // emitter (or unknown temperature): the texel is the appearance at rest,
+        // moved along the Planck locus; the spectral round trip is not exact
+        // for very hot stars and left a magenta cast
         gl_FragColor = vec4(doppler_accurate(color.rgb, ratio, exposure), color.a);
     }
 }
@@ -336,6 +348,7 @@ class Polygon(MqoGpoPolygon):
         else:
             lx = ly = lz = 0.0; lmode = 0
         dRs, dspin = self.disc if self.disc is not None else (0.0, 1.0)
+        lens_w = Lensing.weight(-dX.t)
         glVertexPointer(3, GL_FLOAT, 0, self.vertices)
         glTexCoordPointer(2, GL_FLOAT, 0, self.texcoords)
         program = 0
@@ -345,6 +358,7 @@ class Polygon(MqoGpoPolygon):
                 if self.program_col != program:
                     glUseProgram(self.program_col)
                     boost.set_uniforms(self.program_col, Urel, "rb")
+                    Lensing.set_uniforms(self.program_col, lens_w)
                     glUniformMatrix4fv(self.c_R_local, 1, GL_FALSE, R)
                     glUniform3fv(self.c_xpp_local, 1, xp_perp)
                     glUniform1f(self.c_xpl_local, xp_par)
@@ -361,6 +375,7 @@ class Polygon(MqoGpoPolygon):
                 if self.program_tex != program:
                     glUseProgram(self.program_tex)
                     boost.set_uniforms(self.program_tex, Urel, "rb")
+                    Lensing.set_uniforms(self.program_tex, lens_w)
                     glUniformMatrix4fv(self.t_R_local, 1, GL_FALSE, R)
                     glUniform3fv(self.t_xpp_local, 1, xp_perp)
                     glUniform1f(self.t_xpl_local, xp_par)

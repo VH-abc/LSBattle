@@ -11,6 +11,7 @@ from entity.accretion import AccretionDisk
 from program.const import IMG_DIR, c, VIEW_ANGLE
 from math import tan, radians
 from program.box import BOX
+from program.utils.lensing import Lensing
 from program.text import drawSentence3d
 from program import script
 from program.utils import boost
@@ -140,7 +141,7 @@ class Star(object):
     GLARE_REF = 132.0       # the Sun's scripted brightness: glare sources are drawn relative to it
 
     MIN_GLARE_PX = 4.0      # a body drawn smaller than this radius is enlarged to it, dimmed to match (rasterisation of a smaller disc is too coarse to conserve flux)
-    LADDER_TOP = 0.9 * 65536  # display radiance the exposure ladder in the glare pass still resolves
+    LADDER_TOP = 0.9 * 65536  # encoded radiance the exposure ladder in the glare pass still resolves (~850,000x linear)
     MAX_ENLARGE = 1.0       # past the ladder the source simply clips: an enlarged source makes a halo with a rim
 
     def draw_glare(self, Xp, L, LL, gshift=1.0, scale=1.0):
@@ -175,13 +176,15 @@ class Star(object):
             b_disp = (self.brightness / self.GLARE_REF) * gshift ** (4.0/2.2) * D ** (4.0/2.2)
             if b_disp > self.LADDER_TOP:
                 enlarge = max(enlarge, min(self.MAX_ENLARGE, (b_disp / self.LADDER_TOP) ** (2.2/2.0)))
-        self._draw_globe(Xp, L, LL, ring=False, scale=scale/(self.GLARE_REF*enlarge**(2.0/2.2)), gshift=gshift, enlarge=enlarge)
+        # (a lens makes the body really look bigger, at the same surface brightness)
+        self._draw_globe(Xp, L, LL, ring=False, scale=scale/(self.GLARE_REF*enlarge**(2.0/2.2)), gshift=gshift,
+                         enlarge=enlarge*Lensing.enlarge(self))
 
     def draw(self, Xp, L, LL, gshift=1.0):
         if self.hp > 0:
             if not self.solid and self.depth(Xp) < 1.0:
                 return          # inside a diffuse body: nothing to draw
-            self._draw_globe(Xp, L, LL, gshift=gshift)
+            self._draw_globe(Xp, L, LL, gshift=gshift, enlarge=Lensing.enlarge(self))
         else:
             if not self.flame.draw(self.X_dead, Xp, L):
                 self.alive = False
@@ -217,7 +220,7 @@ class Star(object):
             self.ring.light_scale = lscale
             self.ring.temperature = sun.temperature
 
-    def _draw_globe(self, Xp, L, LL, ring=True, scale=1.0, gshift=1.0, enlarge=1.0):
+    def _draw_globe(self, Xp, L, LL, ring=True, scale=1.0, gshift=1.0, enlarge=1.0, disc=True):
         gshift *= self.self_shift
         if True:
             self._set_lighting()
@@ -246,12 +249,15 @@ class Star(object):
                 # ...but a wide object (ring, accretion disc) must still fit
                 s = min(s, 0.97*F / (r + self.extent))
                 X = Xp + dX*s
-                R = Matrix44.scale(s*enlarge)
+                R = Matrix44.scale(s)
+                Rg = Matrix44.scale(s*enlarge)
             else:
                 X = Xc
-                R = Matrix44.scale(enlarge) if enlarge != 1.0 else Matrix44()
-            self.model.draw(Xp, L, LL, X=X, U=U, R=R, scale=scale, gshift=gshift)
-            if ring and self.disk is not None:
+                R = Matrix44()
+                Rg = Matrix44.scale(enlarge) if enlarge != 1.0 else R
+            # only the globe is enlarged (a lensed body's apparent size), not its disc or ring
+            self.model.draw(Xp, L, LL, X=X, U=U, R=Rg, scale=scale, gshift=gshift)
+            if disc and self.disk is not None:      # an accretion disc glows: drawn in the glare pass too
                 self.disk.draw(Xp, L, LL, X, R, Xp.t, scale=scale, gshift=gshift)
             if ring and self.ring is not None:
                 # translucent: drawn after the globe so it blends over it and

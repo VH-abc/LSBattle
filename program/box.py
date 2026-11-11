@@ -43,6 +43,7 @@ class _Box(object):
         self.TIME_RATE = 1.0       # proper seconds simulated per real second
         self.IMPULSE = False       # booster key: one fixed rapidity kick per tap
         self.IMPULSE_RAPIDITY = 0.5
+        self.SPAWN = "earth"       # body the ship starts in orbit about (the last Travel-to target)
         self.edr_headroom = 1.0
         self.edr_enabled = False
         self.edr_note = ""
@@ -76,6 +77,8 @@ class _Box(object):
                     self.TIME_RATE = float(v)
                 elif w == "IMPULSE_RAPIDITY":
                     self.IMPULSE_RAPIDITY = float(v)
+                elif w == "SPAWN":
+                    self.SPAWN = v.strip().lower()
                 elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA"):
                     setattr(self, w, (v == "True"))
             if (X, Y) not in disp_sizes:
@@ -279,12 +282,19 @@ class _Box(object):
         self._perspective(near, self.far_clip)
         glMatrixMode(GL_MODELVIEW)
 
-    def _perspective(self, near, far):
+    def set_fov(self, fov):
+        """Reload the projection with vertical field of view `fov` (degrees)
+        and the current near and far planes."""
+        glMatrixMode(GL_PROJECTION)
+        self._perspective(self.near_clip, self.far_clip, fov)
+        glMatrixMode(GL_MODELVIEW)
+
+    def _perspective(self, near, far, fov=None):
         """Load the perspective projection.  gluPerspective is not used: on
         this platform it silently keeps the previous matrix for a near plane
         below about 5e-6, which left a landed ship seeing through the
         ground.  Built in double precision, loaded with glLoadMatrixd."""
-        ct = 1.0 / math.tan(math.radians(VIEW_ANGLE) * 0.5)
+        ct = 1.0 / math.tan(math.radians(fov if fov else VIEW_ANGLE) * 0.5)
         asp = self.X * 1.0 / self.Y
         A = -(far + near) / (far - near)
         B = -2.0 * far * near / (far - near)
@@ -397,6 +407,11 @@ class _Box(object):
                 self.set_flag(k, v)
         return name
 
+    def set_spawn(self, name):
+        """Remember where the ship starts: the body it was last sent to."""
+        self.SPAWN = name.lower()
+        self.SAVE = True
+
     def set_impulse_rapidity(self, eta):
         self.IMPULSE_RAPIDITY = max(1.0e-30, min(50.0, eta))   # no useful lower bound
         self.SAVE = True
@@ -441,6 +456,7 @@ class _Box(object):
                 f.write("EXPOSURE=%r\n"%self.EXPOSURE)
                 f.write("TIME_RATE=%r\n"%self.TIME_RATE)
                 f.write("IMPULSE_RAPIDITY=%r\n"%self.IMPULSE_RAPIDITY)
+                f.write("SPAWN=%s\n"%self.SPAWN)
                 for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA"):
                     f.write("%s=%s\n"%(name, getattr(self, name)))
                 f.close()

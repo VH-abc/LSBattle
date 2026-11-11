@@ -19,7 +19,11 @@ class Settings(object):
     def __init__(self, in_game=False):
         self.in_game = in_game
         self.preset_i = 0
+        # the Travel-to list starts on the current spawn body
         self.goto_i = 0
+        for i, (label, body, prefix) in enumerate(BOX.SYSTEMS):
+            if body.lower() == BOX.SPAWN:
+                self.goto_i = i
         self.world = None            # set by the pause menu: the running game
         self.resume = False
 
@@ -111,6 +115,7 @@ class Settings(object):
                 BOX.apply_preset(i)
                 self.world.player.acceleration = BOX.ACCEL
             self.world.start_in_orbit(body, 2.0)
+            BOX.set_spawn(body)
             self.resume = True
 
     def mainloop(self):

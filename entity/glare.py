@@ -3,7 +3,8 @@
 """
 Glare post-effect modelled on the eye's point-spread function.
 
-Passes (no framebuffer objects, so it runs on the legacy GL 2.1 context):
+Passes (one framebuffer object, via the EXT extension the legacy GL 2.1
+context provides, for the only stage that needs more than 8 bits):
   1. copy the rendered scene into texture A;
   2. clear the colour buffer and re-draw only the bright emitters (stars),
      in grey scaled by their real brightness, against the existing depth
@@ -18,6 +19,10 @@ Passes (no framebuffer objects, so it runs on the legacy GL 2.1 context):
      body smaller than a few pixels is drawn enlarged with its radiance
      scaled down by the same area (Star.draw_glare).  Either way a source's
      glare depends on its total light, not on how many pixels it covers;
+     The linearised radiance is rendered straight into the float texture B
+     through a framebuffer object: the window's own buffer is 8-bit in SDR
+     and would clip everything brighter than display white, which is the
+     whole point of the ladder;
   3. draw texture A back to restore the scene;
   4. add the glare: texture B sampled on rings of growing radius around each
      pixel, each ring from the mip level that matches its radius, with equal
@@ -28,6 +33,9 @@ Passes (no framebuffer objects, so it runs on the legacy GL 2.1 context):
 from math import cos, sin, pi
 
 from OpenGL.GL import *
+from OpenGL.GL.EXT.framebuffer_object import (glGenFramebuffersEXT, glBindFramebufferEXT, glFramebufferTexture2DEXT,
+                                              glCheckFramebufferStatusEXT, glGenerateMipmapEXT,
+                                              GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_FRAMEBUFFER_COMPLETE_EXT)
 
 from program.box import BOX
 from program import script
@@ -46,16 +54,19 @@ EXPOSURES = (1.0, 1.0/16.0, 1.0/256.0, 1.0/4096.0, 1.0/65536.0)
 
 def _fs_linear():
     """Linearise the exposure ladder: each pixel's radiance comes from the
-    first pass that does not saturate; the sky is only in pass 0."""
+    first pass that does not saturate; the sky is only in pass 0.  The body
+    shaders decode their (scaled) input and encode their output with a 2.2
+    power, so a pass at scale k holds (lin * k^2.2)^(1/2.2) and its gain is
+    k^-2.2."""
     n = len(EXPOSURES)
     lines = ["#version 120"]
     lines += ["uniform sampler2D src%d;" % i for i in range(n)]
     lines += ["uniform vec2 size;", "void main() {", "    vec2 uv = gl_FragCoord.xy / size;"]
     for i, k in enumerate(EXPOSURES):
         lines.append("    vec3 c%d = texture2D(src%d, uv).rgb;" % (i, i))
-        lines.append("    vec3 lin%d = pow(max(c%d, vec3(0.0)), vec3(2.2)) * %.6g;" % (i, i, (1.0/k) ** 2.2))
+        lines.append("    vec3 lin%d = pow(max(c%d, vec3(0.0)), vec3(2.2)) * %.6g;" % (i, i, (1.0 / k) ** 2.2))
         lines.append("    float m%d = max(max(c%d.r, c%d.g), c%d.b);" % (i, i, i, i))
-    # display units -> linear radiance (relative to the Sun); pass 0 capped
+    # linear radiance relative to the Sun's surface; pass 0 (with the sky) capped
     lines.append("    vec3 outc = min(lin0, vec3(6.0));")
     chain = "lin%d" % (n - 1)
     for i in range(n - 2, 0, -1):
@@ -81,6 +92,7 @@ N_ANG = 16
 FS_GLARE = """
 #version 120
 uniform sampler2D bright;
+uniform sampler2D scene;     // the frame, display-encoded (2.2 power)
 uniform vec2 size;
 uniform float strength;
 uniform float r0;         // innermost ring radius (pixels)
@@ -92,7 +104,7 @@ void main() {
     vec3 star = vec3(0.0);
     float r = r0;
     for (int k = 0; k < %d; k++) {
-        float lod = max(log2(r * 0.4), 0.0);
+        float lod = max(log2(r * 0.7), 0.0);     // blur wide enough that the sample directions do not show
         vec3 ring = vec3(0.0);
         for (int a = 0; a < %d; a++) {
             vec2 o = dirs[a] * r / size;
@@ -113,7 +125,9 @@ void main() {
     // slight warm tint in the far wings, as in real ocular scatter
     vec3 g = halo + star;
     g *= vec3(1.0, 0.93, 0.85);
-    gl_FragColor = vec4(g, 1.0);
+    // add in linear light: decode the frame, add, encode again
+    vec3 lin = pow(max(texture2D(scene, uv).rgb, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(pow(lin + g, vec3(1.0/2.2)), 1.0);
 }
 """ % (N_ANG, N_RINGS, N_ANG, N_ANG, N_ANG, N_ANG)
 
@@ -145,9 +159,14 @@ class Glare(object):
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-            if mip:
-                glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE)
         glBindTexture(GL_TEXTURE_2D, 0)
+        # float render target for the linearised radiance
+        self.fbo = None
+        self.fbo_size = None
+        try:
+            self.fbo = glGenFramebuffersEXT(1)
+        except Exception:
+            self.fbo = None
         glUseProgram(self.p_glare)
         dirs = []
         for a in range(N_ANG):
@@ -156,6 +175,25 @@ class Glare(object):
         glUniform2fv(glGetUniformLocation(self.p_glare, "dirs"), N_ANG, (GLfloat * len(dirs))(*dirs))
         glUseProgram(0)
         self.ready = True
+
+    def _bind_fbo(self, W, H):
+        """Render into texture B (RGBA16F) through the framebuffer object;
+        returns False when that is unavailable."""
+        if self.fbo is None:
+            return False
+        glBindTexture(GL_TEXTURE_2D, self.texB)
+        if self.fbo_size != (W, H):
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, W, H, 0, GL_RGBA, GL_FLOAT, None)
+            glGenerateMipmapEXT(GL_TEXTURE_2D)        # allocate the chain
+            self.fbo_size = (W, H)
+        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, self.fbo)
+        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, self.texB, 0)
+        if glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT) != GL_FRAMEBUFFER_COMPLETE_EXT:
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0)
+            self.fbo = None
+            return False
+        glBindTexture(GL_TEXTURE_2D, self.texC[0])
+        return True
 
     def _quad(self, W, H):
         glBegin(GL_QUADS)
@@ -207,13 +245,20 @@ class Glare(object):
                 self.src_locs = getattr(self, "src_locs", {}); self.src_locs[i] = loc
             glUniform1i(loc, i)
         glUniform2f(glGetUniformLocation(self.p_linear, "size"), float(W), float(H))
+        use_fbo = self._bind_fbo(W, H)
         self._quad(W, H)
         for i in range(1, len(EXPOSURES)):
             glActiveTexture(GL_TEXTURE0 + i)
             glBindTexture(GL_TEXTURE_2D, 0)
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_2D, self.texB)
-        glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 0, 0, W, H, 0)
+        if use_fbo:
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0)
+            glGenerateMipmapEXT(GL_TEXTURE_2D)
+        else:
+            # no float target: the window's buffer clips at display white
+            glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 0, 0, W, H, 0)
+            glGenerateMipmapEXT(GL_TEXTURE_2D)
         if self.debug:
             import array as _array
             def _sum(tex):
@@ -224,23 +269,24 @@ class Glare(object):
             self.main_sum, self.main_pixels = _sum(self.texC[0])
             self.pass_sums = [_sum(t) for t in self.texC]
             glBindTexture(GL_TEXTURE_2D, self.texB)
-        # 3. restore the scene from A
+        # 3. the scene from A plus the glare from B, summed in linear light
+        glDisable(GL_BLEND)
+        glActiveTexture(GL_TEXTURE1)
         glBindTexture(GL_TEXTURE_2D, self.texA)
-        glUseProgram(self.p_copy)
-        glUniform1i(glGetUniformLocation(self.p_copy, "scene"), 0)
-        glUniform2f(glGetUniformLocation(self.p_copy, "size"), float(W), float(H))
-        self._quad(W, H)
-        # 4. add the glare from B
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_ONE, GL_ONE)
+        glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_2D, self.texB)
         glUseProgram(self.p_glare)
         glUniform1i(glGetUniformLocation(self.p_glare, "bright"), 0)
+        glUniform1i(glGetUniformLocation(self.p_glare, "scene"), 1)
         glUniform2f(glGetUniformLocation(self.p_glare, "size"), float(W), float(H))
         glUniform1f(glGetUniformLocation(self.p_glare, "strength"), strength)
         glUniform1f(glGetUniformLocation(self.p_glare, "r0"), 2.0)
         glUniform1f(glGetUniformLocation(self.p_glare, "q"), 1.55)
         self._quad(W, H)
+        glActiveTexture(GL_TEXTURE1)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        glActiveTexture(GL_TEXTURE0)
+        glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glUseProgram(0)
         glBindTexture(GL_TEXTURE_2D, 0)

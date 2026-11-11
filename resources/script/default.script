@@ -299,7 +299,7 @@ World {
                 orbital_radius = 1.135e19 # 1200 light-years
                 primary_star = Sun       # func_str
                 sphere_radius = 1.81922e+09  # m: 2.62 solar radii, three Schwarzschild radii
-                texture = sun_white.png      # func_str
+                texture = star_blue.png      # func_str: the 30,000 K blackbody colour at rest
                 temperature = 30000.0        # float 100.0<=x<=1000000000.0
                 brightness = 400.0        # roughly Planck(30000 K)/Planck(5778 K) x the Sun, in sRGB units
                 tilt = 0.0              # float -180<=x<=180

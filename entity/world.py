@@ -19,7 +19,9 @@ from program.utils.playing import FlatScreen
 from entity import SolarSystem
 from entity import Item
 from program.const import *
+from program.const import VIEW_ANGLE
 from program.box import BOX
+from program import script
 from program.utils import blackbody
 
 
@@ -39,7 +41,9 @@ class World(object):
         self.solar = SolarSystem(self, self.player.P.X, self.scale)
         self.solar.player_lo = self.player.Xlo
         self.navmarkers = NavMarkers(self.solar, arrows=level.is_travel())
-        self.start_in_orbit("earth", 2.0)
+        # start where the ship was last sent (Travel to), else at Earth
+        if not self.start_in_orbit(BOX.SPAWN, 2.0):
+            self.start_in_orbit("earth", 2.0)
         self.glare = Glare()
         self.lensing = Lensing()
         self.enemies = Enemies(world=self)
@@ -272,7 +276,15 @@ class World(object):
         lens = Lensing.pick(self.solar, Xp)
         self.solar.well_shifts(Xp, lens)
         fo = self.solar.obs_shift
-        glDepthMask(GL_FALSE)       # the sky stays at the far plane for the lensing pass
+        if BOX.LENSING and lens is not None:
+            body, D = lens
+            Xc = body.X
+            if body.orbit is not None and BOX.ORBITS:
+                Xc, _ = self.solar.state_at(body, Xp.t - D)
+            Lensing.set_current(lens, Xc, Xp, self.player.P.U)
+        else:
+            Lensing.set_current(None, None, None, None)
+        glDepthMask(GL_FALSE)
         self.sky.draw(matrix_i, self.player.P.U, (Xp - sun) if sun is not None else None, weight, gshift=fo)
         glDepthMask(GL_TRUE)
         if BOX.MARKERS:
@@ -288,24 +300,6 @@ class World(object):
         for gun in self.player.guns:
             gun.bullets.draw(Xp, L)
         self.enemies.bullets.draw(Xp, L)
-
-        if BOX.LENSING:
-            if lens is not None:
-                body, D = lens
-                Xc = body.X
-                if body.orbit is not None and BOX.ORBITS:
-                    Xc, _ = self.solar.state_at(body, Xp.t - D)
-                # the lens geometry is done in the background frame: pass the
-                # hole's background-frame direction and the ship's boost, both
-                # on the eye axes
-                dX = Xc - Xp
-                v = matrix.get_rotate([dX.x, dX.y, dX.z])
-                n = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]) ** 0.5
-                bn, bu, bg, binv = boost.params(self.player.P.U)
-                ne = matrix.get_rotate([bn[0], bn[1], bn[2]])
-                if n > 0.0:
-                    self.lensing.apply((v[0]/n, v[1]/n, v[2]/n), D, 2.0*body.GM, body.is_hole,
-                                       n_eye=(ne[0], ne[1], ne[2]), u=bu, inv=binv)
 
         if BOX.GLARE:
             sky_args = (matrix_i, self.player.P.U, (Xp - sun) if sun is not None else None, weight)
