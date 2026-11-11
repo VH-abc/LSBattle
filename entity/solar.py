@@ -140,7 +140,7 @@ class Star(object):
     GLARE_REF = 132.0       # the Sun's scripted brightness: glare sources are drawn relative to it
 
     MIN_GLARE_PX = 4.0      # a body drawn smaller than this radius is enlarged to it, dimmed to match (rasterisation of a smaller disc is too coarse to conserve flux)
-    LADDER_TOP = 0.9 * 256  # display radiance the exposure ladder in the glare pass still resolves
+    LADDER_TOP = 0.9 * 65536  # display radiance the exposure ladder in the glare pass still resolves
     MAX_ENLARGE = 1.0       # past the ladder the source simply clips: an enlarged source makes a halo with a rim
 
     def draw_glare(self, Xp, L, LL, gshift=1.0, scale=1.0):

@@ -10,10 +10,11 @@ Passes (no framebuffer objects, so it runs on the legacy GL 2.1 context):
      buffer so occlusion is respected; copy that into texture B with
      mipmaps.  A white planet surface is as bright as the Sun once clamped
      to the display, so this is the only honest way to pick glare sources.
-     The bodies are drawn again at 1/16 and 1/256 of the exposure; where a
-     pixel saturates in one pass the next one supplies its radiance, so a
-     hot star or a blueshifted Sun keeps its true brightness up to 256x the
-     Sun's surface (the sky is only in the first pass and stays capped).  A
+     The bodies are drawn again at 1/16, 1/256, 1/4096 and 1/65536 of the
+     exposure; where a pixel saturates in one pass the next one supplies
+     its radiance, so a hot star or a blueshifted Sun keeps its true
+     brightness up to ~60,000x the Sun's surface (the sky is only in the
+     first pass and stays capped).  A
      body smaller than a few pixels is drawn enlarged with its radiance
      scaled down by the same area (Star.draw_glare).  Either way a source's
      glare depends on its total light, not on how many pixels it covers;
@@ -41,31 +42,29 @@ void main() {
 }
 """
 
-EXPOSURES = (1.0, 1.0/16.0, 1.0/256.0)
+EXPOSURES = (1.0, 1.0/16.0, 1.0/256.0, 1.0/4096.0, 1.0/65536.0)
 
-FS_LINEAR = """
-#version 120
-uniform sampler2D src0;     // sky + bodies at the reference exposure
-uniform sampler2D src1;     // bodies at 1/16
-uniform sampler2D src2;     // bodies at 1/256
-uniform vec2 size;
-void main() {
-    vec2 uv = gl_FragCoord.xy / size;
-    vec3 c0 = texture2D(src0, uv).rgb;
-    vec3 c1 = texture2D(src1, uv).rgb;
-    vec3 c2 = texture2D(src2, uv).rgb;
-    // display units -> linear radiance (relative to the Sun)
-    vec3 lin0 = min(pow(max(c0, vec3(0.0)), vec3(2.2)), vec3(6.0));
-    vec3 lin1 = pow(max(c1, vec3(0.0)), vec3(2.2)) * 445.7;        // 16^2.2
-    vec3 lin2 = pow(max(c2, vec3(0.0)), vec3(2.2)) * 198668.0;     // 256^2.2
-    vec3 outc = lin0;
-    if (max(max(c0.r, c0.g), c0.b) > 0.9) {
-        vec3 v = (max(max(c1.r, c1.g), c1.b) > 0.9) ? lin2 : lin1;
-        outc = max(lin0, min(v, vec3(1.0e6)));      // v is 0 where only the sky saturates
-    }
-    gl_FragColor = vec4(outc, 1.0);
-}
-"""
+def _fs_linear():
+    """Linearise the exposure ladder: each pixel's radiance comes from the
+    first pass that does not saturate; the sky is only in pass 0."""
+    n = len(EXPOSURES)
+    lines = ["#version 120"]
+    lines += ["uniform sampler2D src%d;" % i for i in range(n)]
+    lines += ["uniform vec2 size;", "void main() {", "    vec2 uv = gl_FragCoord.xy / size;"]
+    for i, k in enumerate(EXPOSURES):
+        lines.append("    vec3 c%d = texture2D(src%d, uv).rgb;" % (i, i))
+        lines.append("    vec3 lin%d = pow(max(c%d, vec3(0.0)), vec3(2.2)) * %.6g;" % (i, i, (1.0/k) ** 2.2))
+        lines.append("    float m%d = max(max(c%d.r, c%d.g), c%d.b);" % (i, i, i, i))
+    # display units -> linear radiance (relative to the Sun); pass 0 capped
+    lines.append("    vec3 outc = min(lin0, vec3(6.0));")
+    chain = "lin%d" % (n - 1)
+    for i in range(n - 2, 0, -1):
+        chain = "((m%d > 0.9) ? %s : lin%d)" % (i, chain, i)
+    lines.append("    if (m0 > 0.9) outc = max(outc, min(%s, vec3(1.0e7)));   // 0 where only the sky saturates" % chain)
+    lines += ["    gl_FragColor = vec4(outc, 1.0);", "}"]
+    return "\n".join(lines)
+
+FS_LINEAR = _fs_linear()
 
 FS_COPY = """
 #version 120
