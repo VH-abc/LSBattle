@@ -51,7 +51,9 @@ class Settings(object):
                     BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)][0], "" if self.world is not None else "  [in game only]")]
 
     def init(self, choice=0):
-        self.menu = MenuItems(self.texts(), BOX.Y/16, ret=True, title="Settings")
+        texts = self.texts()
+        # row height: fit every entry plus the title and the return item on screen
+        self.menu = MenuItems(texts, min(BOX.Y/16, BOX.Y/(len(texts) + 4)), ret=True, title="Settings")
         self.menu.choice = choice
 
     def step_impulse(self, direction):

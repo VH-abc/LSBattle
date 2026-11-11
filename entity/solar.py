@@ -8,7 +8,8 @@ from go import Matrix44, Vector3, Vector4D, Lorentz, Quaternion, calc_repulsion
 from model.polygon import Polygon
 from model.flame import Flame
 from entity.accretion import AccretionDisk
-from program.const import IMG_DIR, c
+from program.const import IMG_DIR, c, VIEW_ANGLE
+from math import tan, radians
 from program.box import BOX
 from program.text import drawSentence3d
 from program import script
@@ -138,15 +139,43 @@ class Star(object):
 
     GLARE_REF = 132.0       # the Sun's scripted brightness: glare sources are drawn relative to it
 
+    MIN_GLARE_PX = 4.0      # a body drawn smaller than this radius is enlarged to it, dimmed to match (rasterisation of a smaller disc is too coarse to conserve flux)
+    MAX_ENLARGE = 64.0      # beyond this the source is drawn clipped (its glare then understates it)
+    GLARE_CLIP = 0.9        # display value the enlarged source is held below so the buffer never clips
+
     def draw_glare(self, Xp, L, LL, gshift=1.0):
         """Draw this body as a glare source: its rendered radiance divided by
         the Sun's, so only what is really Sun-bright on screen glares, which
-        includes a planet or the sky once they are blueshifted enough."""
+        includes a planet or the sky once they are blueshifted enough.
+
+        The glare must depend on the light a body sends, not on how many
+        pixels it covers, so a body that is smaller than a pixel, or whose
+        radiance would clip in the 8-bit source buffer, is drawn enlarged
+        and dimmed by the same area factor (in linear terms: the buffer is
+        gamma-encoded, linearised with a 2.2 power in the glare pass)."""
         if self.hp <= 0:
             return
         if not self.solid and self.depth(Xp) < 1.0:
             return
-        self._draw_globe(Xp, L, LL, ring=False, scale=1.0/self.GLARE_REF, gshift=gshift)
+        enlarge = 1.0
+        dX = self.X - Xp
+        r_lab = dX.length()
+        dX.t = -r_lab
+        dx = boost.transform_null(boost.U_of_L(L), dX)
+        r = -dx.t
+        if r > 0.0 and self.radius > 0.0 and r_lab > 0.0:
+            px = (self.radius / r) * BOX.Y / (2.0 * tan(radians(VIEW_ANGLE) * 0.5))
+            if px < self.MIN_GLARE_PX:
+                enlarge = self.MIN_GLARE_PX / max(px, 1e-30)
+            # display radiance estimate: scripted brightness over the Sun's,
+            # times the Doppler boost D^4 of the body's centre (D = r/r_lab),
+            # which the gamma-encoded buffer sees as D^(4/2.2)
+            D = r / r_lab
+            b_disp = (self.brightness / self.GLARE_REF) * gshift ** (4.0/2.2) * D ** (4.0/2.2)
+            if b_disp > self.GLARE_CLIP:
+                enlarge = max(enlarge, (b_disp / self.GLARE_CLIP) ** (2.2/2.0))
+            enlarge = min(enlarge, self.MAX_ENLARGE)
+        self._draw_globe(Xp, L, LL, ring=False, scale=1.0/(self.GLARE_REF*enlarge**(2.0/2.2)), gshift=gshift, enlarge=enlarge)
 
     def draw(self, Xp, L, LL, gshift=1.0):
         if self.hp > 0:
@@ -188,7 +217,7 @@ class Star(object):
             self.ring.light_scale = lscale
             self.ring.temperature = sun.temperature
 
-    def _draw_globe(self, Xp, L, LL, ring=True, scale=1.0, gshift=1.0):
+    def _draw_globe(self, Xp, L, LL, ring=True, scale=1.0, gshift=1.0, enlarge=1.0):
         gshift *= self.self_shift
         if True:
             self._set_lighting()
@@ -217,10 +246,10 @@ class Star(object):
                 # ...but a wide object (ring, accretion disc) must still fit
                 s = min(s, 0.97*F / (r + self.extent))
                 X = Xp + dX*s
-                R = Matrix44.scale(s)
+                R = Matrix44.scale(s*enlarge)
             else:
                 X = Xc
-                R = Matrix44()
+                R = Matrix44.scale(enlarge) if enlarge != 1.0 else Matrix44()
             self.model.draw(Xp, L, LL, X=X, U=U, R=R, scale=scale, gshift=gshift)
             if ring and self.disk is not None:
                 self.disk.draw(Xp, L, LL, X, R, Xp.t, scale=scale, gshift=gshift)

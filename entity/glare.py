@@ -9,7 +9,11 @@ Passes (no framebuffer objects, so it runs on the legacy GL 2.1 context):
      in grey scaled by their real brightness, against the existing depth
      buffer so occlusion is respected; copy that into texture B with
      mipmaps.  A white planet surface is as bright as the Sun once clamped
-     to the display, so this is the only honest way to pick glare sources;
+     to the display, so this is the only honest way to pick glare sources.
+     A body that would saturate the buffer, or that is smaller than a pixel,
+     is drawn enlarged with its radiance scaled down by the same area
+     (Star.draw_glare), so a source's glare depends on its total light, not
+     on how many pixels it covers or whether it clips;
   3. draw texture A back to restore the scene;
   4. add the glare: texture B sampled on rings of growing radius around each
      pixel, each ring from the mip level that matches its radius, with equal
@@ -75,7 +79,7 @@ void main() {
         vec3 ring = vec3(0.0);
         for (int a = 0; a < %d; a++) {
             vec2 o = dirs[a] * r / size;
-            ring += min(texture2D(bright, uv + o, lod).rgb, vec3(6.0));
+            ring += texture2D(bright, uv + o, lod).rgb;
         }
         halo += ring;
         // six rays (every third direction, both signs are in dirs)
@@ -101,6 +105,8 @@ class Glare(object):
 
     def __init__(self):
         self.ready = False
+        self.debug = False        # tests: record the total linear source energy of the last frame
+        self.source_energy = 0.0
 
     def _init_gl(self):
         self.p_copy = compile_program(VS, FS_COPY)
@@ -172,6 +178,15 @@ class Glare(object):
         self._quad(W, H)
         glBindTexture(GL_TEXTURE_2D, self.texB)
         glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 0, 0, W, H, 0)
+        if self.debug:
+            import array as _array
+            def _sum(tex):
+                glBindTexture(GL_TEXTURE_2D, tex)
+                a = _array.array('f', bytes(glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT)))
+                return float(sum(a)), sum(1 for v in a if v > 0.0)
+            self.source_energy, self.source_pixels = _sum(self.texB)
+            self.main_sum, self.main_pixels = _sum(self.texC)
+            glBindTexture(GL_TEXTURE_2D, self.texB)
         # 3. restore the scene from A
         glBindTexture(GL_TEXTURE_2D, self.texA)
         glUseProgram(self.p_copy)
