@@ -189,7 +189,7 @@ class Glare(object):
             if self.debug:
                 import array as _array
                 a = _array.array('f', bytes(glReadPixels(0, 0, W, H, GL_RGB, GL_FLOAT)))
-                self.fb_sums = getattr(self, "fb_sums", {}); self.fb_sums[i] = (float(sum(a)), sum(1 for v in a if v > 0.0))
+                self.fb_sums = getattr(self, "fb_sums", {}); self.fb_sums[i] = (float(sum(a)), sum(1 for v in a if v > 0.0), max(a))
             glActiveTexture(GL_TEXTURE0 + i)
             glBindTexture(GL_TEXTURE_2D, self.texC[i])
             glCopyTexImage2D(GL_TEXTURE_2D, 0, fmt, 0, 0, W, H, 0)
