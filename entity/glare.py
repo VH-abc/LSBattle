@@ -10,10 +10,13 @@ Passes (no framebuffer objects, so it runs on the legacy GL 2.1 context):
      buffer so occlusion is respected; copy that into texture B with
      mipmaps.  A white planet surface is as bright as the Sun once clamped
      to the display, so this is the only honest way to pick glare sources.
-     A body that would saturate the buffer, or that is smaller than a pixel,
-     is drawn enlarged with its radiance scaled down by the same area
-     (Star.draw_glare), so a source's glare depends on its total light, not
-     on how many pixels it covers or whether it clips;
+     The bodies are drawn again at 1/16 and 1/256 of the exposure; where a
+     pixel saturates in one pass the next one supplies its radiance, so a
+     hot star or a blueshifted Sun keeps its true brightness up to 256x the
+     Sun's surface (the sky is only in the first pass and stays capped).  A
+     body smaller than a few pixels is drawn enlarged with its radiance
+     scaled down by the same area (Star.draw_glare).  Either way a source's
+     glare depends on its total light, not on how many pixels it covers;
   3. draw texture A back to restore the scene;
   4. add the glare: texture B sampled on rings of growing radius around each
      pixel, each ring from the mip level that matches its radius, with equal
@@ -38,14 +41,29 @@ void main() {
 }
 """
 
+EXPOSURES = (1.0, 1.0/16.0, 1.0/256.0)
+
 FS_LINEAR = """
 #version 120
-uniform sampler2D src;
+uniform sampler2D src0;     // sky + bodies at the reference exposure
+uniform sampler2D src1;     // bodies at 1/16
+uniform sampler2D src2;     // bodies at 1/256
 uniform vec2 size;
 void main() {
-    vec3 c = texture2D(src, gl_FragCoord.xy / size).rgb;
-    // display units -> linear radiance (relative to the Sun), capped
-    gl_FragColor = vec4(min(pow(max(c, vec3(0.0)), vec3(2.2)), vec3(6.0)), 1.0);
+    vec2 uv = gl_FragCoord.xy / size;
+    vec3 c0 = texture2D(src0, uv).rgb;
+    vec3 c1 = texture2D(src1, uv).rgb;
+    vec3 c2 = texture2D(src2, uv).rgb;
+    // display units -> linear radiance (relative to the Sun)
+    vec3 lin0 = min(pow(max(c0, vec3(0.0)), vec3(2.2)), vec3(6.0));
+    vec3 lin1 = pow(max(c1, vec3(0.0)), vec3(2.2)) * 445.7;        // 16^2.2
+    vec3 lin2 = pow(max(c2, vec3(0.0)), vec3(2.2)) * 198668.0;     // 256^2.2
+    vec3 outc = lin0;
+    if (max(max(c0.r, c0.g), c0.b) > 0.9) {
+        vec3 v = (max(max(c1.r, c1.g), c1.b) > 0.9) ? lin2 : lin1;
+        outc = max(lin0, min(v, vec3(1.0e6)));      // v is 0 where only the sky saturates
+    }
+    gl_FragColor = vec4(outc, 1.0);
 }
 """
 
@@ -111,12 +129,13 @@ class Glare(object):
     def _init_gl(self):
         self.p_copy = compile_program(VS, FS_COPY)
         self.p_linear = compile_program(VS, FS_LINEAR)
-        self.texC = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, self.texC)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        self.texC = list(glGenTextures(len(EXPOSURES)))
+        for tex in self.texC:
+            glBindTexture(GL_TEXTURE_2D, tex)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         self.p_glare = compile_program(VS, FS_GLARE)
         self.texA = glGenTextures(1)
         self.texB = glGenTextures(1)
@@ -148,8 +167,9 @@ class Glare(object):
         glEnd()
 
     def apply(self, draw_sources, strength=1.0):
-        """draw_sources(): draws the glare sources with the current 3-D
-        matrices; called with the colour buffer cleared and depth writes off."""
+        """draw_sources(k): draws the glare sources at brightness scale k
+        (the sky only for k == 1) with the current 3-D matrices; called with
+        the colour buffer cleared and depth writes off."""
         if not self.ready:
             self._init_gl()
         W, H = BOX.X, BOX.Y
@@ -158,24 +178,41 @@ class Glare(object):
         # 1. scene -> A
         glBindTexture(GL_TEXTURE_2D, self.texA)
         glCopyTexImage2D(GL_TEXTURE_2D, 0, fmt, 0, 0, W, H, 0)
-        # 2. bright emitters only -> framebuffer -> B (mipmapped)
-        glClearColor(0.0, 0.0, 0.0, 1.0)
-        glClear(GL_COLOR_BUFFER_BIT)
-        glClearColor(*script.ui.backimage.color)
-        glDepthMask(GL_FALSE)
-        draw_sources()
-        glDepthMask(GL_TRUE)
-        glBindTexture(GL_TEXTURE_2D, self.texC)
-        glCopyTexImage2D(GL_TEXTURE_2D, 0, fmt, 0, 0, W, H, 0)
+        # 2. bright emitters only, at each exposure -> framebuffer -> C[i]
+        for i, k in enumerate(EXPOSURES):
+            glActiveTexture(GL_TEXTURE0)          # the bodies bind their textures on unit 0
+            glClearColor(0.0, 0.0, 0.0, 1.0)
+            glClear(GL_COLOR_BUFFER_BIT)
+            glClearColor(*script.ui.backimage.color)
+            glDepthMask(GL_FALSE)
+            draw_sources(k)
+            glDepthMask(GL_TRUE)
+            if self.debug:
+                import array as _array
+                a = _array.array('f', bytes(glReadPixels(0, 0, W, H, GL_RGB, GL_FLOAT)))
+                self.fb_sums = getattr(self, "fb_sums", {}); self.fb_sums[i] = (float(sum(a)), sum(1 for v in a if v > 0.0))
+            glActiveTexture(GL_TEXTURE0 + i)
+            glBindTexture(GL_TEXTURE_2D, self.texC[i])
+            glCopyTexImage2D(GL_TEXTURE_2D, 0, fmt, 0, 0, W, H, 0)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, self.texC[0])
         glDisable(GL_CULL_FACE)
         glDisable(GL_BLEND)
         FlatScreen.push()
         glColor(1.0, 1.0, 1.0, 1.0)
         # linearise (C -> framebuffer) and copy into B with mipmaps
         glUseProgram(self.p_linear)
-        glUniform1i(glGetUniformLocation(self.p_linear, "src"), 0)
+        for i in range(len(EXPOSURES)):
+            loc = glGetUniformLocation(self.p_linear, "src%d" % i)
+            if self.debug:
+                self.src_locs = getattr(self, "src_locs", {}); self.src_locs[i] = loc
+            glUniform1i(loc, i)
         glUniform2f(glGetUniformLocation(self.p_linear, "size"), float(W), float(H))
         self._quad(W, H)
+        for i in range(1, len(EXPOSURES)):
+            glActiveTexture(GL_TEXTURE0 + i)
+            glBindTexture(GL_TEXTURE_2D, 0)
+        glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_2D, self.texB)
         glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 0, 0, W, H, 0)
         if self.debug:
@@ -185,7 +222,8 @@ class Glare(object):
                 a = _array.array('f', bytes(glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT)))
                 return float(sum(a)), sum(1 for v in a if v > 0.0)
             self.source_energy, self.source_pixels = _sum(self.texB)
-            self.main_sum, self.main_pixels = _sum(self.texC)
+            self.main_sum, self.main_pixels = _sum(self.texC[0])
+            self.pass_sums = [_sum(t) for t in self.texC]
             glBindTexture(GL_TEXTURE_2D, self.texB)
         # 3. restore the scene from A
         glBindTexture(GL_TEXTURE_2D, self.texA)
