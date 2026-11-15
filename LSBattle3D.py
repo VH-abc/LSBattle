@@ -23,6 +23,14 @@ except:
     sys.exit(1)
 
 def run():
+    # hang watchdog: every 20 s the Python stack of each thread goes to
+    # hang.log, so a frozen game leaves a record of where it was stuck
+    try:
+        import faulthandler, os
+        _log = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "hang.log"), "w")
+        faulthandler.dump_traceback_later(20, repeat=True, file=_log)
+    except Exception:
+        pass
     from sequence.game import Game
     game = Game()
     game.mainloop()

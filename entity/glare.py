@@ -37,6 +37,45 @@ from OpenGL.GL.EXT.framebuffer_object import (glGenFramebuffersEXT, glBindFrameb
                                               glCheckFramebufferStatusEXT, glGenerateMipmapEXT,
                                               GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_FRAMEBUFFER_COMPLETE_EXT)
 
+
+def _avail(f):
+    try:
+        return bool(f)
+    except Exception:
+        return False
+
+
+def _fbo_api():
+    """The framebuffer-object entry points this context provides: the core
+    (GL 3.0) names, else the EXT ones, else None.  Looked up once a
+    context exists, since the pointers are resolved per context."""
+    try:
+        from OpenGL.GL import (glGenFramebuffers, glBindFramebuffer, glFramebufferTexture2D,
+                               glCheckFramebufferStatus, GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_COMPLETE)
+        if _avail(glGenFramebuffers) and _avail(glBindFramebuffer):
+            return (glGenFramebuffers, glBindFramebuffer, glFramebufferTexture2D, glCheckFramebufferStatus,
+                    GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_COMPLETE)
+    except Exception:
+        pass
+    if _avail(glGenFramebuffersEXT) and _avail(glBindFramebufferEXT):
+        return (glGenFramebuffersEXT, glBindFramebufferEXT, glFramebufferTexture2DEXT, glCheckFramebufferStatusEXT,
+                GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_FRAMEBUFFER_COMPLETE_EXT)
+    return None
+
+
+def _mipmap_func():
+    """glGenerateMipmap (core), else the EXT one, else None (then the
+    GL_GENERATE_MIPMAP texture flag makes glCopyTexImage2D build the chain)."""
+    try:
+        from OpenGL.GL import glGenerateMipmap
+        if _avail(glGenerateMipmap):
+            return glGenerateMipmap
+    except Exception:
+        pass
+    if _avail(glGenerateMipmapEXT):
+        return glGenerateMipmapEXT
+    return None
+
 from program.box import BOX
 from program import script
 from program.utils import compile_program
@@ -163,10 +202,17 @@ class Glare(object):
         # float render target for the linearised radiance
         self.fbo = None
         self.fbo_size = None
-        try:
-            self.fbo = glGenFramebuffersEXT(1)
-        except Exception:
-            self.fbo = None
+        self.fbo_api = _fbo_api()
+        self.gen_mipmap = _mipmap_func()
+        if self.gen_mipmap is None:
+            glBindTexture(GL_TEXTURE_2D, self.texB)
+            glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE)
+            glBindTexture(GL_TEXTURE_2D, 0)
+        if self.fbo_api is not None and self.gen_mipmap is not None:
+            try:
+                self.fbo = self.fbo_api[0](1)
+            except Exception:
+                self.fbo = None
         glUseProgram(self.p_glare)
         dirs = []
         for a in range(N_ANG):
@@ -181,15 +227,16 @@ class Glare(object):
         returns False when that is unavailable."""
         if self.fbo is None:
             return False
+        gen, bind, attach, status, FB, ATT0, COMPLETE = self.fbo_api
         glBindTexture(GL_TEXTURE_2D, self.texB)
         if self.fbo_size != (W, H):
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, W, H, 0, GL_RGBA, GL_FLOAT, None)
-            glGenerateMipmapEXT(GL_TEXTURE_2D)        # allocate the chain
+            self.gen_mipmap(GL_TEXTURE_2D)        # allocate the chain
             self.fbo_size = (W, H)
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, self.fbo)
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, self.texB, 0)
-        if glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT) != GL_FRAMEBUFFER_COMPLETE_EXT:
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0)
+        bind(FB, self.fbo)
+        attach(FB, ATT0, GL_TEXTURE_2D, self.texB, 0)
+        if status(FB) != COMPLETE:
+            bind(FB, 0)
             self.fbo = None
             return False
         glBindTexture(GL_TEXTURE_2D, self.texC[0])
@@ -253,12 +300,13 @@ class Glare(object):
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_2D, self.texB)
         if use_fbo:
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0)
-            glGenerateMipmapEXT(GL_TEXTURE_2D)
+            self.fbo_api[1](self.fbo_api[4], 0)
+            self.gen_mipmap(GL_TEXTURE_2D)
         else:
             # no float target: the window's buffer clips at display white
             glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 0, 0, W, H, 0)
-            glGenerateMipmapEXT(GL_TEXTURE_2D)
+            if self.gen_mipmap is not None:
+                self.gen_mipmap(GL_TEXTURE_2D)
         if self.debug:
             import array as _array
             def _sum(tex):
