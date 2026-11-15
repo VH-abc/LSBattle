@@ -132,6 +132,20 @@ class _Box(object):
                 sdl2.ext.SDL_quit()
                 sys.exit(-1)
             self.context = sdl2.SDL_GL_CreateContext(self.window)
+            try:
+                from program.utils.shader import gl_log
+                import os as _os
+                _p = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "gl.log")
+                open(_p, "w").close()
+                exts = (glGetString(GL_EXTENSIONS) or b"").decode("utf8", "replace").split()
+                gl_log("GL_VERSION %s\nGL_RENDERER %s\nGLSL %s\nwindow %dx%d fullscreen %s HDR %s\n%d extensions: %s" % (
+                    glGetString(GL_VERSION), glGetString(GL_RENDERER), glGetString(GL_SHADING_LANGUAGE_VERSION),
+                    self.X, self.Y, self.FULL_SCREEN, self.HDR, len(exts), " ".join(exts)))
+            except Exception as e:
+                try:
+                    gl_log("gl info failed: %r" % (e,))
+                except Exception:
+                    pass
             # The game only uses raw key events; with text input on, held
             # keys are routed through the Cocoa text system (accent popup).
             sdl2.SDL_StopTextInput()

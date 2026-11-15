@@ -285,7 +285,16 @@ class World(object):
         else:
             Lensing.set_current(None, None, None, None)
         glDepthMask(GL_FALSE)
+        if not getattr(self, "_sky_checked", False):
+            self._sky_checked = True
+            from program.utils.shader import gl_log
+            gl_log("before sky: glGetError %d; sky quad %s; program %s" % (
+                glGetError(), list(self.sky.vertex)[:6], getattr(self.sky, "program", None)))
         self.sky.draw(matrix_i, self.player.P.U, (Xp - sun) if sun is not None else None, weight, gshift=fo)
+        if getattr(self, "_sky_checked", False) is True:
+            self._sky_checked = "done"
+            from program.utils.shader import gl_log
+            gl_log("after sky: glGetError %d, lens %s" % (glGetError(), Lensing.current is not None))
         glDepthMask(GL_TRUE)
         if BOX.MARKERS:
             self.axes.draw(L, matrix_i)

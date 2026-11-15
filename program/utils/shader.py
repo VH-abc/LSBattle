@@ -10,14 +10,29 @@ class ProgramInfo(object):
         self.fragment_source = fragment_source
         self.key = key
 
+def gl_log(text):
+    """Append a line to gl.log next to the game (GL diagnostics)."""
+    try:
+        import os
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "gl.log")
+        with open(path, "a") as f:
+            f.write(text.rstrip() + "\n")
+    except Exception:
+        pass
+
 def compile_shader(source, shader_type):
     shader = glCreateShader(shader_type)
     glShaderSource(shader, source)
     glCompileShader(shader)
 
     status = glGetShaderiv(shader, GL_COMPILE_STATUS)
+    info = glGetShaderInfoLog(shader)
+    if info:
+        head = source.strip().split("\n")[1:3]
+        gl_log("%s shader %s: %s" % ("vertex" if shader_type == GL_VERTEX_SHADER else "fragment",
+                                      "FAILED" if not status else "warnings", info if isinstance(info, str) else info.decode("utf8", "replace")))
     if not status:
-        s = glGetShaderInfoLog(shader)
+        s = info
         glDeleteShader(shader)
         raise ValueError("Shader compilation failed: %s"%s)
     return shader

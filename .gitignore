@@ -5,3 +5,4 @@ resources/img/accretion_ring*.gpo
 resources/config/setting.ini
 build/
 hang.log
+gl.log
