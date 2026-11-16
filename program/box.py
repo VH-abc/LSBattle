@@ -394,9 +394,9 @@ class _Box(object):
     # is dark again, never above the set exposure.  Rates in stops per second.
     # Moderately bright scenes are left as they are; a blinding one is
     # brought down, however bright, only until the frame's mean is about
-    # half of white (dimming starts above 0.6, stops below 0.4), within a
-    # fraction of a second.
-    AUTO_TARGET = 0.50
+    # three quarters of white (dimming starts above 0.75, recovery below
+    # 0.5), within a fraction of a second.
+    AUTO_TARGET = 0.625
     AUTO_DOWN, AUTO_UP = 24.0, 12.0
     AUTO_MAX = 40.0
 
