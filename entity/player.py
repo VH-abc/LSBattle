@@ -718,7 +718,15 @@ class Player(object):
             # applied as an exact boost in this substep (Wigner rotation too)
             keys.k_impulse = 0
             fwd = self.quaternion.get_RotMat().forward
-            acceleration -= Vector4D.from_tv(0.0, fwd) * (BOX.IMPULSE_RAPIDITY / ds)
+            eta = BOX.IMPULSE_RAPIDITY
+            if self.landed is not None and self.landed.GM > 0.0 and not self.landed.is_hole:
+                # launch: from a surface the tap is at least 1.15x the orbital
+                # speed there, along the nose (an ellipse from the surface out
+                # to about 1.6 radii), where a weak orbital booster could not
+                # even lift off
+                R = max(self.landed.collision_radius, 1.0e-30)
+                eta = max(eta, 1.15 * (self.landed.GM / R) ** 0.5)
+            acceleration -= Vector4D.from_tv(0.0, fwd) * (eta / ds)
         repulsion = Vector4D()
         self.calc_repulsion(repulsion)
         if repulsion.squared_length() > self.repulsion_cap**2:
