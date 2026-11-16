@@ -147,17 +147,20 @@ void main() {
     float r = r0;
     for (int k = 0; k < %d; k++) {
         if (r > rmax) break;
+        // rings fade out over the last octave below the spread limit (a hard
+        // cut leaves the blurred last ring's square footprint)
+        float wk = clamp((rmax - r) / (0.5 * rmax), 0.0, 1.0);
         float lod = max(log2(r * 0.7), 0.0);     // blur wide enough that the sample directions do not show
         vec3 ring = vec3(0.0);
         for (int a = 0; a < %d; a++) {
             vec2 o = dirs[a] * r / size;
             ring += texture2D(bright, uv + o, lod).rgb;
         }
-        halo += ring;
+        halo += ring * wk;
         // six rays (every third direction, both signs are in dirs)
         for (int a = 0; a < %d; a += 3) {
             vec2 o = dirs[a] * r / size;
-            star += texture2D(bright, uv + o, max(lod - 1.0, 0.0)).rgb;
+            star += texture2D(bright, uv + o, max(lod - 1.0, 0.0)).rgb * wk;
         }
         r *= q;
     }
@@ -333,7 +336,7 @@ class Glare(object):
         glUniform1i(glGetUniformLocation(self.p_glare, "bright"), 0)
         glUniform1i(glGetUniformLocation(self.p_glare, "scene"), 1)
         glUniform2f(glGetUniformLocation(self.p_glare, "size"), float(W), float(H))
-        glUniform1f(glGetUniformLocation(self.p_glare, "strength"), strength)
+        glUniform1f(glGetUniformLocation(self.p_glare, "strength"), strength * BOX.GLARE_GAIN)
         glUniform1f(glGetUniformLocation(self.p_glare, "r0"), 2.0)
         glUniform1f(glGetUniformLocation(self.p_glare, "q"), 1.55)
         # spread limit: degrees of view -> pixels (the ring radius is the

@@ -489,6 +489,7 @@ World {
                 mass = 2e+23              # kg
                 lit_by = Abyss              # func_str
                 orbital_phi = 0.0        # float -180<=x<=180
+                orbital_theta = 12.0        # off the disc plane, so the disc is never seen exactly edge-on
                 orbital_radius = 4.5528e+09 # m
                 primary_star = Abyss       # func_str
                 sphere_radius = 3e+06  # m

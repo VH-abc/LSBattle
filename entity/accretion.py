@@ -41,42 +41,6 @@ def _pole_matrix(pole):
     return Matrix44.z_rotation(pi)
 
 
-H_REL = 0.05     # disc half-thickness over radius (a thin disc, flaring outward)
-
-
-def write_slab(path, r0, r1, v0, v1, nr=8, na=96, hrel=H_REL, inner_rim=False, outer_rim=False):
-    """Annulus r0..r1 (units of the Schwarzschild radius) with thickness: a
-    top and a bottom face at y = +-hrel*r, and the inner/outer rims where
-    asked; texcoords u = azimuth, v in [v0, v1] (rims take their row's v).
-    Seen edge-on it is a band, not a line."""
-    lines = ["Game Polygon Object"]
-    def rows(sign):
-        for j in range(nr + 1):
-            r = r0 + (r1 - r0)*j/nr
-            v = v0 + (v1 - v0)*j/nr
-            for i in range(na + 1):
-                a = 2.0*pi*i/na
-                lines.append("p %.6f %.6f %.6f %.6f %.6f" % (r*cos(a), sign*hrel*r, r*sin(a), i/float(na), v))
-    rows(1.0); rows(-1.0)
-    lines.append('m 1.0 1.0 1.0 1.0 "accretion.png"')
-    idx = []
-    ntop = (nr + 1)*(na + 1)
-    def quad(a, b, c, d):
-        idx.extend([a, b, c, b, d, c, a, c, b, b, c, d])      # both windings
-    for base in (0, ntop):
-        for j in range(nr):
-            for i in range(na):
-                a = base + j*(na+1) + i
-                quad(a, a + 1, a + na + 1, a + na + 2)
-    for j, on in ((0, inner_rim), (nr, outer_rim)):
-        if on:
-            for i in range(na):
-                a = j*(na+1) + i
-                quad(a, a + 1, ntop + a, ntop + a + 1)
-    lines.append("i " + " ".join(map(str, idx)))
-    open(path, "w").write("\n".join(lines) + "\n")
-
-
 def write_annulus(path, r0, r1, v0, v1, nr=8, na=96):
     """Full annulus, radii r0..r1 (units of the Schwarzschild radius), in the
     plane y = 0; texcoords u = azimuth, v in [v0, v1]."""
@@ -113,8 +77,7 @@ class AccretionDisk(object):
             r0 = inner * (outer/inner) ** (j/float(NRING))
             r1 = inner * (outer/inner) ** ((j+1)/float(NRING))
             path = IMG_DIR + "accretion_ring%d.gpo" % j
-            write_slab(path, r0, r1, j/float(NRING), (j+1)/float(NRING),
-                       inner_rim=(j == 0), outer_rim=(j == NRING - 1))
+            write_annulus(path, r0, r1, j/float(NRING), (j+1)/float(NRING))
             rm = sqrt(r0*r1)
             T = T_in * (rm/inner) ** -0.75
             b = brightness * (rm/inner) ** -1.5

@@ -1,7 +1,7 @@
 # coding: utf8
 # entity/world.py
 import math
-from math import atan2, pi
+from math import atan2, pi, cos, sin
 from random import random, randint
 
 from OpenGL.GL import *
@@ -176,6 +176,11 @@ class World(object):
         if t < 1e-12:
             tx, ty, tz, t = 1.0, 0.0, 0.0, 1.0
         tx /= t; tz /= t
+        if body.is_hole:
+            # inclined 30 degrees to the accretion disc (pole +y): the disc is
+            # seen from above, never edge-on
+            ci, si = cos(pi/6.0), sin(pi/6.0)
+            tx, ty, tz = ci*tx, si, ci*tz
         # along the orbit to 60 degrees from the sub-solar point: the body
         # shows three-quarters lit with the terminator in view.  n was the
         # anti-sun direction, so the sun direction is -n.
