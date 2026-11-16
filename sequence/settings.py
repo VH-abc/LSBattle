@@ -42,7 +42,7 @@ class Settings(object):
                 "Background grid (with HUD): %s" % ("On" if BOX.GRID else "Off"),
                 "Brake key available: %s" % ("Yes" if BOX.BRAKE else "No"),
                 "Glare effect: %s" % ("On" if BOX.GLARE else "Off"),
-                "Visuals: %s  (in game: v)" % ("Realistic, the eye model throughout" if BOX.VISUAL == "REALISTIC" else "Aesthetic: glare limited, exposure adapts"),
+                "Visuals: %s  (in game: v)" % ("Realistic, the eye model throughout" if BOX.VISUAL == "REALISTIC" else "Aesthetic: glare limited in spread and veil"),
                 "Glare spread limit: %s" % ("unlimited (the eye's 1/angle^2 wing)" if BOX.GLARE_SPREAD <= 0.0 else "%g degrees" % BOX.GLARE_SPREAD),
                 "Automatic exposure (dims a very bright view): %s" % ("On" if BOX.AUTOEXP else "Off"),
                 "Cosmic microwave background: %s" % ("On" if BOX.CMB else "Off"),

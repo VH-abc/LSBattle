@@ -138,6 +138,7 @@ uniform float strength;
 uniform float r0;         // innermost ring radius (pixels)
 uniform float q;          // ring radius ratio
 uniform float rmax;       // rings beyond this radius (pixels) are left out: a limit on the spread
+uniform float gcap;       // soft ceiling on the glare added to a pixel, linear (1 = white); 0: none
 uniform vec2 dirs[%d];
 void main() {
     vec2 uv = gl_FragCoord.xy / size;
@@ -167,6 +168,8 @@ void main() {
     // slight warm tint in the far wings, as in real ocular scatter
     vec3 g = halo + star;
     g *= vec3(1.0, 0.93, 0.85);
+    // the veil can never swamp what it lies over: g -> gcap as g grows
+    if (gcap > 0.0) g = g / (1.0 + g / gcap);
     // add in linear light: decode the frame, add, encode again
     vec3 lin = pow(max(texture2D(scene, uv).rgb, vec3(0.0)), vec3(2.2));
     gl_FragColor = vec4(pow(lin + g, vec3(1.0/2.2)), 1.0);
@@ -342,6 +345,7 @@ class Glare(object):
         else:
             rmax = 1.0e9
         glUniform1f(glGetUniformLocation(self.p_glare, "rmax"), rmax)
+        glUniform1f(glGetUniformLocation(self.p_glare, "gcap"), BOX.GLARE_CAP)
         self._quad(W, H)
         glActiveTexture(GL_TEXTURE1)
         glBindTexture(GL_TEXTURE_2D, 0)

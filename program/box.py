@@ -30,7 +30,8 @@ class _Box(object):
         self.COLOR_MODE = "GAME"   # "GAME" (original look) or "ACCURATE" (blackbody Doppler)
         self.HDR = False           # request a float framebuffer + macOS EDR
         self.EXPOSURE = 1.0        # multiplier used by the accurate colour mode
-        self.AUTOEXP = True        # lower the exposure automatically while the view is very bright
+        self.AUTOEXP = False       # lower the exposure automatically while the view is very bright
+        self.GLARE_CAP = 0.3       # soft ceiling on the glare veil, fraction of white (0: none)
         self.GLARE_SPREAD = 5.0    # degrees the glare may spread (0: unlimited, the eye's 1/theta^2 wing)
         self.VISUAL = "AESTHETIC"  # "REALISTIC" (eye model throughout) or "AESTHETIC" (auto exposure, limited glare)
         self.auto_ev = 0.0         # the automatic reduction now in force, stops (<= 0)
@@ -85,6 +86,8 @@ class _Box(object):
                     self.SPAWN = v.strip().lower()
                 elif w == "GLARE_SPREAD":
                     self.GLARE_SPREAD = float(v)
+                elif w == "GLARE_CAP":
+                    self.GLARE_CAP = float(v)
                 elif w == "VISUAL":
                     self.VISUAL = v.strip().upper()
                 elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
@@ -357,16 +360,19 @@ class _Box(object):
         self.SAVE = True
 
     def set_visual(self, mode):
-        """REALISTIC: the eye model throughout (glare wing unlimited, no
-        automatic exposure); AESTHETIC: glare limited to 5 degrees and the
-        exposure adapting to a very bright view."""
+        """REALISTIC: the eye model throughout (glare wing unlimited and
+        uncapped); AESTHETIC: glare limited to 5 degrees and its veil soft-
+        capped at 0.3 of white, so a screen-filling sun is still full white
+        (EDR peak with HDR on) but its glare cannot swamp the rest of the
+        view.  Automatic exposure stays a separate option, off in both."""
         self.VISUAL = mode
+        self.AUTOEXP = False
         if mode == "REALISTIC":
-            self.AUTOEXP = False
             self.GLARE_SPREAD = 0.0
+            self.GLARE_CAP = 0.0
         else:
-            self.AUTOEXP = True
             self.GLARE_SPREAD = 5.0
+            self.GLARE_CAP = 0.3
         self.SAVE = True
 
     def toggle_visual(self):
@@ -535,6 +541,7 @@ class _Box(object):
                 f.write("IMPULSE_RAPIDITY=%r\n"%self.IMPULSE_RAPIDITY)
                 f.write("SPAWN=%s\n"%self.SPAWN)
                 f.write("GLARE_SPREAD=%r\n"%self.GLARE_SPREAD)
+                f.write("GLARE_CAP=%r\n"%self.GLARE_CAP)
                 f.write("VISUAL=%s\n"%self.VISUAL)
                 for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
                     f.write("%s=%s\n"%(name, getattr(self, name)))
