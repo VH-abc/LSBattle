@@ -477,9 +477,9 @@ World {
                 temperature = 100.0        # float 100.0<=x<=1000000000.0
                 brightness = 0.0        # nothing escapes
                 disk_inner = 3.0         # accretion disc, in Schwarzschild radii
-                disk_outer = 4.5
+                disk_outer = 4.5         # planets orbit outside it
                 disk_temperature = 20000.0
-                disk_brightness = 4.0
+                disk_brightness = 600.0      # sRGB units at the inner edge: Planck(20000 K) ~ 4.5 x the Sun's 132
                 tilt = 20.0              # float -180<=x<=180
             }
             star {
@@ -529,6 +529,56 @@ World {
                 brightness = 1.0        # float 0.0<=x<=1000000.0
                 spin = 220.0
                 tilt = 40.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Ember             # hot dwarf star at 7 Schwarzschild radii of Abyss: period 454 s, 0.27c; lights the planets
+                mass = 6e+29              # kg
+                orbital_phi = 60.0        # float -180<=x<=180
+                orbital_theta = -8.0        # float -90<=x<=90
+                orbital_radius = 5.79447e+09 # m
+                primary_star = Abyss       # func_str
+                sphere_radius = 3e+07  # m
+                texture = star_blue.png      # func_str
+                temperature = 25000.0        # float 100.0<=x<=1000000000.0
+                brightness = 700.0        # roughly Planck(25000 K)/Planck(5778 K) x the Sun (132), in sRGB units
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Halo             # ringed giant at 8.5 Schwarzschild radii, period 608 s, 0.24c, on an inclined orbit
+                mass = 2e+27              # kg
+                lit_by = Abyss              # func_str
+                orbital_phi = -20.0        # float -180<=x<=180
+                orbital_theta = 25.0        # float -90<=x<=90
+                orbital_radius = 7.03615e+09 # m
+                primary_star = Abyss       # func_str
+                sphere_radius = 7e+06  # m
+                texture = saturn.png      # func_str
+                ring = saturn_ring.png    # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 80.0
+                tilt = 35.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Shard             # rock just outside the accretion disc, 5 Schwarzschild radii: period 274 s, 0.32c
+                mass = 5e+22              # kg
+                lit_by = Abyss              # func_str
+                orbital_phi = -150.0        # float -180<=x<=180
+                orbital_theta = 30.0        # float -90<=x<=90
+                orbital_radius = 4.13891e+09 # m
+                primary_star = Abyss       # func_str
+                sphere_radius = 1.2e+06  # m
+                texture = mars.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 300.0
+                tilt = 60.0              # float -180<=x<=180
             }
             star {
                 hp = 10000000000                # int 1<=x<=10000000000

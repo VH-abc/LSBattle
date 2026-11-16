@@ -30,6 +30,10 @@ class _Box(object):
         self.COLOR_MODE = "GAME"   # "GAME" (original look) or "ACCURATE" (blackbody Doppler)
         self.HDR = False           # request a float framebuffer + macOS EDR
         self.EXPOSURE = 1.0        # multiplier used by the accurate colour mode
+        self.AUTOEXP = True        # lower the exposure automatically while the view is very bright
+        self.GLARE_SPREAD = 5.0    # degrees the glare may spread (0: unlimited, the eye's 1/theta^2 wing)
+        self.VISUAL = "AESTHETIC"  # "REALISTIC" (eye model throughout) or "AESTHETIC" (auto exposure, limited glare)
+        self.auto_ev = 0.0         # the automatic reduction now in force, stops (<= 0)
         self.GRID = True           # show the background grid with the HUD
         self.BRAKE = True          # allow the brake (retro-thrust) key
         self.GLARE = False         # glare / bloom post-effect
@@ -79,7 +83,11 @@ class _Box(object):
                     self.IMPULSE_RAPIDITY = float(v)
                 elif w == "SPAWN":
                     self.SPAWN = v.strip().lower()
-                elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA"):
+                elif w == "GLARE_SPREAD":
+                    self.GLARE_SPREAD = float(v)
+                elif w == "VISUAL":
+                    self.VISUAL = v.strip().upper()
+                elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
                     setattr(self, w, (v == "True"))
             if (X, Y) not in disp_sizes:
                 X, Y = disp_sizes[0]
@@ -348,6 +356,58 @@ class _Box(object):
         self.EXPOSURE = max(1e-6, min(1e6, exposure))
         self.SAVE = True
 
+    def set_visual(self, mode):
+        """REALISTIC: the eye model throughout (glare wing unlimited, no
+        automatic exposure); AESTHETIC: glare limited to 5 degrees and the
+        exposure adapting to a very bright view."""
+        self.VISUAL = mode
+        if mode == "REALISTIC":
+            self.AUTOEXP = False
+            self.GLARE_SPREAD = 0.0
+        else:
+            self.AUTOEXP = True
+            self.GLARE_SPREAD = 5.0
+        self.SAVE = True
+
+    def toggle_visual(self):
+        self.set_visual("AESTHETIC" if self.VISUAL == "REALISTIC" else "REALISTIC")
+
+    GLARE_SPREADS = (0.0, 20.0, 10.0, 5.0, 2.0)
+
+    def cycle_glare_spread(self):
+        """Next glare spread limit: unlimited, 20, 10, 5, 2 degrees."""
+        opts = self.GLARE_SPREADS
+        try:
+            i = opts.index(self.GLARE_SPREAD)
+        except ValueError:
+            i = -1
+        self.GLARE_SPREAD = opts[(i + 1) % len(opts)]
+        self.SAVE = True
+
+    def exposure(self):
+        """The exposure in force: the setting, reduced by the automatic
+        adaptation when that is on."""
+        return self.EXPOSURE * 2.0 ** self.auto_ev if self.AUTOEXP else self.EXPOSURE
+
+    # Automatic exposure: like an eye adapting, the exposure comes down while
+    # the frame's mean brightness is above a target and recovers when the view
+    # is dark again, never above the set exposure.  Rates in stops per second.
+    # a bright scene stays bright: the frame's mean is only brought down to
+    # 0.3 of white, by at most 4 stops, and within a fraction of a second
+    AUTO_TARGET = 0.30
+    AUTO_DOWN, AUTO_UP = 24.0, 12.0
+    AUTO_MAX = 4.0
+
+    def auto_exposure_update(self, mean, dt):
+        if not self.AUTOEXP:
+            self.auto_ev = 0.0
+            return
+        if mean > self.AUTO_TARGET * 1.5:
+            self.auto_ev -= self.AUTO_DOWN * dt * min(4.0, mean / self.AUTO_TARGET)
+        elif mean < self.AUTO_TARGET * 0.5:
+            self.auto_ev += self.AUTO_UP * dt
+        self.auto_ev = max(-self.AUTO_MAX, min(0.0, self.auto_ev))
+
     def set_time_rate(self, rate):
         self.TIME_RATE = max(1.0/1024.0, min(1.0e12, rate))
         self.SAVE = True
@@ -387,7 +447,7 @@ class _Box(object):
                     k = k.upper()
                     if k in ("ACCEL", "TIME_RATE", "EXPOSURE", "IMPULSE_RAPIDITY"):
                         vals[k] = float(v)
-                    elif k in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA"):
+                    elif k in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
                         vals[k] = v.lower() in ("1", "true", "on", "yes")
                     elif k == "COLOR_MODE":
                         vals[k] = v.upper()
@@ -471,7 +531,9 @@ class _Box(object):
                 f.write("TIME_RATE=%r\n"%self.TIME_RATE)
                 f.write("IMPULSE_RAPIDITY=%r\n"%self.IMPULSE_RAPIDITY)
                 f.write("SPAWN=%s\n"%self.SPAWN)
-                for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA"):
+                f.write("GLARE_SPREAD=%r\n"%self.GLARE_SPREAD)
+                f.write("VISUAL=%s\n"%self.VISUAL)
+                for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
                     f.write("%s=%s\n"%(name, getattr(self, name)))
                 f.close()
             except:

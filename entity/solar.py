@@ -205,20 +205,26 @@ class Star(object):
             self.model.light = None
             return
         ldir = (d.x/n, d.y/n, d.z/n)
+        lum, Rl, T = sun.brightness, sun.radius, sun.temperature
+        if sun.disk is not None and sun.disk.brightness > lum:
+            # a black hole's light is its accretion disc: an annulus of the
+            # disc's (inner-edge) radiance with the same area
+            lum, T = sun.disk.brightness, sun.disk.temperature
+            Rl = sun.radius * (sun.disk.outer**2 - sun.disk.inner**2) ** 0.5
         if BOX.COLOR_MODE == "ACCURATE":
             # a white Lambertian surface at distance n has radiance
             # L_star * (R/n)^2 in linear light; ucolor works in sRGB-encoded
             # units (the star's "brightness"), hence the 1/2.2 power
-            lscale = sun.brightness * (sun.radius / n) ** (2.0 / 2.2)
+            lscale = lum * (Rl / n) ** (2.0 / 2.2)
         else:
             lscale = 1.0            # the game look keeps the texture brightness
         self.model.light = (ldir, 1)
         self.model.light_scale = lscale
-        self.model.temperature = sun.temperature
+        self.model.temperature = T
         if self.ring is not None:
             self.ring.light = (ldir, 2)
             self.ring.light_scale = lscale
-            self.ring.temperature = sun.temperature
+            self.ring.temperature = T
 
     def _draw_globe(self, Xp, L, LL, ring=True, scale=1.0, gshift=1.0, enlarge=1.0, disc=True):
         gshift *= self.self_shift
@@ -235,6 +241,9 @@ class Star(object):
             lo = self.system.player_lo
             dX.x -= lo[0]; dX.y -= lo[1]; dX.z -= lo[2]
             dX.t = -dX.length()
+            # a hole's globe only hides what is behind the hole; from inside
+            # the horizon it would hide everything (the sky paints the shadow)
+            hide_globe = self.is_hole and -dX.t < 1.05*self.radius
             dx = boost.transform_null(boost.U_of_L(L), dX)
             r = -dx.t
             if r > 0.5*BOX.far_clip:
@@ -256,7 +265,8 @@ class Star(object):
                 R = Matrix44()
                 Rg = Matrix44.scale(enlarge) if enlarge != 1.0 else R
             # only the globe is enlarged (a lensed body's apparent size), not its disc or ring
-            self.model.draw(Xp, L, LL, X=X, U=U, R=Rg, scale=scale, gshift=gshift)
+            if not hide_globe:
+                self.model.draw(Xp, L, LL, X=X, U=U, R=Rg, scale=scale, gshift=gshift)
             if disc and self.disk is not None:      # an accretion disc glows: drawn in the glare pass too
                 self.disk.draw(Xp, L, LL, X, R, Xp.t, scale=scale, gshift=gshift)
             if ring and self.ring is not None:
@@ -424,7 +434,9 @@ class SolarSystem(object):
         for star in self.stars.values():
             if star.GM <= 0.0 or star.hp <= 0:
                 continue
-            r = max((star.X - Xp).length(), star.collision_radius)
+            r = (star.X - Xp).length()
+            # inside a black hole the step must follow the fall right down
+            r = max(r, 0.01*star.collision_radius if star.is_hole else star.collision_radius)
             if r > 1.0e30:
                 continue                      # no gravity to speak of out there
             t = 0.005 * r * (r / star.GM) ** 0.5
@@ -506,8 +518,8 @@ class SolarSystem(object):
         body it is resting on, or None.  lo (see Player.Xlo) is updated so
         that P.X + lo sits exactly on the surface."""
         for star in self.stars.values():
-            if star.hp <= 0 or not star.solid:
-                continue
+            if star.hp <= 0 or not star.solid or star.is_hole:
+                continue              # a black hole has no surface: the fall goes on inside
             dx, dy, dz = P.X.x - star.X.x, P.X.y - star.X.y, P.X.z - star.X.z
             if lo is not None:
                 dx += lo[0]; dy += lo[1]; dz += lo[2]
@@ -605,7 +617,9 @@ class SolarSystem(object):
             return
         body, D = lens
         Rs = 2.0 * body.GM
-        if D > Rs:
+        if D > Rs and not (body.is_hole and D < Lensing.RAIN*Rs):
+            # (in the rain frame close to a hole the sky's shift comes from
+            # its table per direction; the bodies get none)
             self.obs_shift = 1.0 / (1.0 - Rs/D) ** 0.5
         for star in self.stars.values():
             if star is body:
@@ -634,7 +648,7 @@ class SolarSystem(object):
     def calc_repulsion(self, Xp, acceleration, collision_radius, repulsion):
         U = Vector4D(1.0, 0.0, 0.0, 0.0)
         for star in self.stars.values():
-            if star.hp > 0 and star.solid:
+            if star.hp > 0 and star.solid and not star.is_hole:
                 star.X.t = Xp.t - Xp.distance_to(star.X)
                 # a ship is tiny next to a planet: contact is at the surface,
                 # with only a small margin, not at the ship's game-play radius

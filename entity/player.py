@@ -11,6 +11,7 @@ from go import calc_repulsion
 from entity import Bullets
 from model.pointsprite import PointSprite
 from model.lines import Lines
+from program.utils.lensing import Lensing
 from program.box import BOX
 from program.utils import FlatScreen, fill_screen, DY_TEXTURE_EDGE
 from program.text import drawSentence
@@ -163,6 +164,8 @@ class Player(object):
         self.turn_rate = self.turn_acceleration / max(self.turn_resistivity, 1e-9)
         self.collision_radius = script.player.collision_radius*world.scale
         self.landed = None            # body the ship is resting on
+        self.inside = None            # black hole whose horizon the ship is within
+        self.plunged = None           # black hole at whose singularity the ship ended
         self.collision_radius2 = (script.player.collision_radius*world.scale)**2
         self.delay = self.collision_radius
         self.repulsion = (script.player.repulsion + script.enemy.repulsion) * 0.5
@@ -408,11 +411,31 @@ class Player(object):
             tx /= n2; ty /= n2; tz /= n2
             ut = 0.0
         GM = body.GM; Rs = 2.0*GM
-        rmin = Rs * (1.0 + 1.0e-9)
-        f = 1.0 - Rs/r if r > rmin else 1.0 - Rs/rmin
+        hole = body.is_hole
+        # A black hole does not stop the ship: the fall goes on through the
+        # horizon to just short of the singularity, where the final state is
+        # held (self.plunged).  Outside RAIN R_s the ship's U is its velocity
+        # relative to the local static observer; inside it is relative to the
+        # 'rain' observer (radial free fall from rest at infinity), whose
+        # frame is regular across the horizon.  Either way the conserved
+        # energy e, angular momentum L and dr/dtau are the same, and the
+        # proper-time equations below hold everywhere.
+        rain0 = hole and r < Lensing.RAIN*Rs
+        rmin = Rs*0.02 if hole else Rs * (1.0 + 1.0e-9)
+        rfloor = Rs*0.02
+        if r < rmin:
+            r = rmin
+        f = 1.0 - Rs/r
         L = r*ut                          # conserved angular momentum per mass
-        rd = ur * f ** 0.5                # dr/dtau
-        g1 = U.t / f ** 0.5               # dt/dtau at the start
+        if rain0:
+            bv = (Rs/r) ** 0.5            # the rain frame's inward speed
+            rd = ur - U.t*bv              # dr/dtau
+            e = U.t - bv*ur               # e = f dt/dtau
+            g1 = U.t                      # d(rain time)/dtau
+        else:
+            rd = ur * f ** 0.5            # dr/dtau
+            e = U.t * f ** 0.5
+            g1 = U.t / f ** 0.5           # dt/dtau at the start
         # 3. RK4 on (r, rd, phi)
         L2 = L*L
         def deriv(r, rd):
@@ -426,24 +449,40 @@ class Player(object):
         r2 = r + ds/6.0*(k1[0] + 2.0*k2[0] + 2.0*k3[0] + k4[0])
         rd2 = rd + ds/6.0*(k1[1] + 2.0*k2[1] + 2.0*k3[1] + k4[1])
         dph = ds/6.0*(k1[2] + 2.0*k2[2] + 2.0*k3[2] + k4[2])
-        if r2 < rmin:
+        if hole:
+            if r2 <= rfloor:
+                # the end: the state at this moment is held, for looking around
+                r2 = rfloor
+                self.plunged = body
+        elif r2 < rmin:
             r2 = rmin
             if rd2 < 0.0:
                 rd2 = 0.0
+        self.inside = body if (hole and r2 < Rs) else None
         # 4. back to the game's frame
         c, s = math.cos(dph), math.sin(dph)
         n2x, n2y, n2z = c*nx + s*tx, c*ny + s*ty, c*nz + s*tz
         t2x, t2y, t2z = c*tx - s*nx, c*ty - s*ny, c*tz - s*nz
         f2 = 1.0 - Rs/r2
-        ur2 = rd2 / f2 ** 0.5
         ut2 = L / r2
+        if hole and r2 < Lensing.RAIN*Rs:
+            bv2 = (Rs/r2) ** 0.5
+            # gamma relative to the rain observer, in a form that has no
+            # cancellation at the horizon: (1 + L^2/r^2 + rd^2)/(e - beta rd)
+            gam = (1.0 + ut2*ut2 + rd2*rd2) / max(e - bv2*rd2, 1.0e-12)
+            ur2 = rd2 + gam*bv2
+            g2 = gam
+        else:
+            ur2 = rd2 / f2 ** 0.5
+            g2 = None
         U.x = ur2*n2x + ut2*t2x; U.y = ur2*n2y + ut2*t2y; U.z = ur2*n2z + ut2*t2z
         u2 = U.x*U.x + U.y*U.y + U.z*U.z
         if u2 > 1.0e36:                   # at the horizon: keep gamma finite (same floor as the freeze)
             k = 1.0e18 / u2 ** 0.5
             U.x *= k; U.y *= k; U.z *= k; u2 = 1.0e36
         U.t = (1.0 + u2) ** 0.5 if u2 < 1.0e16 else u2 ** 0.5
-        g2 = U.t / f2 ** 0.5
+        if g2 is None:
+            g2 = U.t / f2 ** 0.5
         P.X.t += 0.5*(g1 + g2) * ds
         d2x, d2y, d2z = r2*n2x, r2*n2y, r2*n2z
         P.X.x = B.x + d2x; P.X.y = B.y + d2y; P.X.z = B.z + d2z
@@ -646,6 +685,11 @@ class Player(object):
 
         self.guns[self.state.gun_mode].gun_action(keys, ds)
 
+        if self.plunged is not None:
+            # at the singularity: nothing moves any more, only the view
+            self.time += ds
+            return
+
         if self.landed is not None and self.landed.hp > 0 and not (
                 keys.k_accel or keys.k_impulse or keys.k_brake or keys.k_orbit):
             # At rest on a body with no thrust commanded: ride with it.  A
@@ -717,11 +761,8 @@ class Player(object):
         self.landed = self.world.solar.land(self.P, 1.0e-6, self.Xlo)   # 300 m above the surface
         if self.landed is not None:
             self._rest_offset()
-            if self.landed.is_hole and not self.dead:
-                # past the horizon there is no coming back
-                self.dead = True
-                self.death_message = "Crossed the event horizon of %s" % self.landed.name
-                self.state.hp = 0
+        if strong is None or not strong.is_hole:
+            self.inside = None
         # The ship carries its axes by Fermi-Walker transport; expressed in
         # the pure-boost rest frame that is a Wigner rotation per step.
         rw = Quaternion(*qw)

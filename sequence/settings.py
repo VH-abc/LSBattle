@@ -14,7 +14,7 @@ ACCELS = [1e-8, 3e-8, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3
 
 
 class Settings(object):
-    PRESET, ACCEL, COLOR, HDR, GRID, BRAKE, GLARE, CMB, CROSSHAIR, MARKERS, GRAVITY, ORBITS, BOOSTER, LENSING, INERTIA, GOTO = range(16)
+    PRESET, ACCEL, COLOR, HDR, GRID, BRAKE, GLARE, VISUAL, GLARE_SPREAD, AUTOEXP, CMB, CROSSHAIR, MARKERS, GRAVITY, ORBITS, BOOSTER, LENSING, INERTIA, GOTO = range(19)
 
     def __init__(self, in_game=False):
         self.in_game = in_game
@@ -42,6 +42,9 @@ class Settings(object):
                 "Background grid (with HUD): %s" % ("On" if BOX.GRID else "Off"),
                 "Brake key available: %s" % ("Yes" if BOX.BRAKE else "No"),
                 "Glare effect: %s" % ("On" if BOX.GLARE else "Off"),
+                "Visuals: %s  (in game: v)" % ("Realistic, the eye model throughout" if BOX.VISUAL == "REALISTIC" else "Aesthetic: glare limited, exposure adapts"),
+                "Glare spread limit: %s" % ("unlimited (the eye's 1/angle^2 wing)" if BOX.GLARE_SPREAD <= 0.0 else "%g degrees" % BOX.GLARE_SPREAD),
+                "Automatic exposure (dims a very bright view): %s" % ("On" if BOX.AUTOEXP else "Off"),
                 "Cosmic microwave background: %s" % ("On" if BOX.CMB else "Off"),
                 "Crosshair: %s" % ("On" if BOX.CROSSHAIR else "Off"),
                 "Navigation markers: %s" % ("On" if BOX.MARKERS else "Off"),
@@ -92,6 +95,12 @@ class Settings(object):
             BOX.set_flag("BRAKE", not BOX.BRAKE)
         elif choice == self.GLARE:
             BOX.set_flag("GLARE", not BOX.GLARE)
+        elif choice == self.VISUAL:
+            BOX.toggle_visual()
+        elif choice == self.GLARE_SPREAD:
+            BOX.cycle_glare_spread()
+        elif choice == self.AUTOEXP:
+            BOX.set_flag("AUTOEXP", not BOX.AUTOEXP)
         elif choice == self.CMB:
             BOX.set_flag("CMB", not BOX.CMB)
         elif choice == self.CROSSHAIR:
@@ -114,7 +123,7 @@ class Settings(object):
             if i is not None:
                 BOX.apply_preset(i)
                 self.world.player.acceleration = BOX.ACCEL
-            self.world.start_in_orbit(body, 2.0)
+            self.world.start_in_orbit(body, self.world.spawn_factor(body))
             BOX.set_spawn(body)
             self.resume = True
 

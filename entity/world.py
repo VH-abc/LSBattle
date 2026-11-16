@@ -1,5 +1,6 @@
 # coding: utf8
 # entity/world.py
+import math
 from math import atan2, pi
 from random import random, randint
 
@@ -42,7 +43,7 @@ class World(object):
         self.solar.player_lo = self.player.Xlo
         self.navmarkers = NavMarkers(self.solar, arrows=level.is_travel())
         # start where the ship was last sent (Travel to), else at Earth
-        if not self.start_in_orbit(BOX.SPAWN, 2.0):
+        if not self.start_in_orbit(BOX.SPAWN, self.spawn_factor(BOX.SPAWN)):
             self.start_in_orbit("earth", 2.0)
         self.glare = Glare()
         self.lensing = Lensing()
@@ -136,6 +137,13 @@ class World(object):
         self.solar.hit_check(self.player.P.X)
         self.item_action(ds)
 
+    def spawn_factor(self, name):
+        """Orbit radius for a start at body `name`, in body radii: 2 for a
+        planet or star; 6 Schwarzschild radii for a black hole (twice the
+        innermost stable orbit, outside the inner disc, with it in view)."""
+        body = self.solar.stars.get(name.lower()) if name else None
+        return 6.0 if body is not None and body.is_hole else 2.0
+
     def start_in_orbit(self, name, factor):
         """Start the ship on a circular orbit of `factor` body radii about
         body `name`, in the plane of the body's own orbit, prograde, over the
@@ -217,6 +225,37 @@ class World(object):
         self.player.landed = body
         self.player._rest_offset()
         return True
+
+    def _auto_exposure(self):
+        """Mean brightness of the drawn frame (its top mip level), fed to
+        BOX.auto_exposure_update with the real time since the last frame."""
+        import sdl2
+        now = sdl2.SDL_GetTicks() * 0.001
+        last = getattr(self, "_auto_t", None)
+        self._auto_t = now
+        dt = min(0.1, now - last) if last is not None else 0.0
+        W, H = int(BOX.X), int(BOX.Y)
+        if getattr(self, "_auto_tex", None) is None or self._auto_size != (W, H):
+            if getattr(self, "_auto_tex", None) is None:
+                self._auto_tex = glGenTextures(1)
+            glBindTexture(GL_TEXTURE_2D, self._auto_tex)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE)
+            self._auto_size = (W, H)
+            self._auto_levels = int(math.log(max(W, H), 2)) + 1
+        else:
+            glBindTexture(GL_TEXTURE_2D, self._auto_tex)
+        glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, 0, 0, W, H, 0)
+        top = self._auto_levels - 1
+        # the top level is 1x1 when W and H are powers of two; otherwise a few
+        # texels: average them
+        data = glGetTexImage(GL_TEXTURE_2D, top, GL_RGB, GL_UNSIGNED_BYTE)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        buf = bytes(data) if not isinstance(data, bytes) else data
+        if buf:
+            mean = sum(buf) / float(len(buf)) / 255.0
+            BOX.auto_exposure_update(mean, dt)
 
     def draw_crosshair(self):
         """Thin reticle at the screen centre: four ticks with a gap, drawn
@@ -319,6 +358,11 @@ class World(object):
                     glEnable(GL_DEPTH_TEST)
                 self.solar.draw_glare(Xp, L, LL, scale=k)
             self.glare.apply(sources)
+
+        if BOX.AUTOEXP and BOX.COLOR_MODE == "ACCURATE":
+            self._auto_exposure()
+        else:
+            BOX.auto_ev = 0.0
 
         if not BOX.MARKERS:
             self.navmarkers.leader_of = {}

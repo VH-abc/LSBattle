@@ -41,7 +41,8 @@ uniform float lens_k;
 uniform vec3 lens_n;
 uniform float lens_u, lens_inv;
 uniform float lens_exact;        // 1: a black hole; the sky map comes from the table below
-uniform sampler1D lens_table;    // view angle from the hole (0..pi) -> (source angle, shadow flag)
+uniform sampler1D lens_table;    // view angle from the hole (0..pi) -> (source angle, shadow flag, frequency factor)
+float lens_gs = 1.0;             // set by lens_source: observed/emitted frequency of the sky in that direction (exact table only)
 // direction toward a source seen by the ship -> the same ray in the background frame
 vec3 lens_to_lab(vec3 v) {
     float c = dot(v, lens_n);
@@ -80,6 +81,7 @@ vec3 lens_source(vec3 d) {
         vec4 p = texture1D(lens_table, th * 0.31830988618379067);
         if (p.g > 0.5) return vec3(0.0);
         beta = p.r;
+        lens_gs = p.b;
     } else {
         beta = th - lens_alpha(th, 1.0);
     }
@@ -110,7 +112,8 @@ vec3 lens_apparent(vec3 d, float w) {
 """
 
 
-from math import pi, sin, sqrt
+import math
+from math import pi, sin, sqrt, acos
 
 
 def _simpson(f, a, b, n=40):
@@ -121,32 +124,29 @@ def _simpson(f, a, b, n=40):
     return s * h / 3.0
 
 
-def hole_table(Rs, r, N=256):
-    """The sky of a static observer at radius r from a Schwarzschild black
-    hole, exactly: for view angles theta from the hole's direction
-    (0..pi), the angle beta from that direction the light really came from,
-    and whether the ray is one that climbed out of the hole (the shadow).
-
-    A ray at angle theta has impact parameter b = r sin(theta)/sqrt(1-Rs/r).
-    Looking toward the hole (theta < pi/2) the photon is outgoing at the
-    observer: it has passed its periapsis, so b must exceed the capture
-    value 3 sqrt(3)/2 Rs, and it swept 2 Phi(b) - Psi(b, r); looking away it
-    is incoming and swept Psi(b, r), where Phi is the sweep from infinity to
-    periapsis and Psi from infinity to r (u = 1/r':
-    d phi = du / sqrt(1/b^2 - u^2 + Rs u^3)).  beta = pi - sweep."""
-    out = []
-    f = 1.0 - Rs/r
-    if f <= 0.0:
-        return [(0.0, 1.0)] * N
-    sf = sqrt(f)
+def _photon_source(Rs, r, b, outgoing):
+    """A photon at radius r with impact parameter b, outgoing (past its
+    periapsis) or ingoing: the angle from the hole's direction the light
+    came from, and whether it is one that climbed out of the hole (the
+    shadow).  With u = 1/r', d phi = du / sqrt(1/b^2 - u^2 + Rs u^3); Phi is
+    the sweep from infinity to periapsis and Psi from infinity to r, so an
+    outgoing photon swept 2 Phi - Psi, an ingoing one Psi, and the source
+    angle is pi - sweep.  Outgoing photons need b above the capture value
+    3 sqrt(3)/2 Rs; any photon whose periapsis lies outside r was never at
+    infinity (it came up from the horizon), inside the horizon that is
+    every photon with b above the capture value."""
     bc = 1.5*sqrt(3.0)*Rs
-    def g(u, b):
+    def g(u):
         return 1.0/(b*b) - u*u + Rs*u*u*u
-    def periapsis_u(b):
-        # smallest positive root of g: from u = 1/b, where g is slightly positive
+    if b < 1e-12:
+        return (0.0, 1.0) if outgoing else (pi, 0.0)
+    if outgoing and b <= bc*(1.0 + 1e-9):
+        return (0.0, 1.0)
+    if b > bc:
+        # periapsis: smallest positive root of g, from u = 1/b (g slightly positive)
         u = 1.0/b
         for _ in range(40):
-            gu = g(u, b)
+            gu = g(u)
             dg = -2.0*u + 3.0*Rs*u*u
             if abs(dg) < 1e-300:
                 break
@@ -157,51 +157,130 @@ def hole_table(Rs, r, N=256):
                 u = un
                 break
             u = un
-        return u
+        up = u
+        if up < (1.0 - 1e-9)/r:
+            return (0.0, 1.0)
+        # Phi: from u = 0 to u_p with u = u_p (1 - t^2) (regular integrand)
+        dg = -2.0*up + 3.0*Rs*up*up
+        def ph(t):
+            if t <= 1e-6:
+                # the limit at t -> 0 from g ~ -g'(u_p) u_p t^2
+                return 2.0*up / sqrt(max(-dg*up, 1e-300))
+            u = up*(1.0 - t*t)
+            return 2.0*up*t / sqrt(max(g(u), 1e-300))
+        Phi = _simpson(ph, 0.0, 1.0)
+        # Psi: from u = 0 (t = 1) to u = 1/r (t_r), same substitution
+        tr = sqrt(max(1.0 - 1.0/(r*up), 0.0))
+        Psi = _simpson(ph, tr, 1.0)
+        sweep = (2.0*Phi - Psi) if outgoing else Psi
+    else:
+        # no periapsis: a straight integral in u from 0 to 1/r
+        sweep = _simpson(lambda u: 1.0/sqrt(max(g(u), 1e-300)), 0.0, 1.0/r)
+    return (pi - sweep, 0.0)
+
+
+def hole_table(Rs, r, N=256):
+    """The sky of a static observer at radius r (> Rs) from a Schwarzschild
+    black hole, exactly: for view angles theta from the hole's direction
+    (0..pi), (the angle beta from that direction the light really came
+    from, shadow flag, observed/emitted frequency).  A ray at angle theta
+    has impact parameter b = r sin(theta)/sqrt(1-Rs/r); looking toward the
+    hole (theta < pi/2) the photon is outgoing at the observer.  The
+    frequency factor is the uniform 1/sqrt(1-Rs/r) of a static observer."""
+    f = 1.0 - Rs/r
+    if f <= 0.0:
+        return [(0.0, 1.0, 1.0)] * N
+    sf = sqrt(f)
+    out = []
     for i in range(N):
         th = pi*(i + 0.5)/N
-        b = r*sin(th)/sf
-        outgoing = th < 0.5*pi
-        if b < 1e-12:
-            out.append((0.0 if not outgoing else 0.0, 1.0 if outgoing else 0.0))
-            continue
-        if outgoing and b <= bc*(1.0 + 1e-9):
-            out.append((0.0, 1.0))
-            continue
-        if b > bc:
-            up = periapsis_u(b)
-            if up < (1.0 - 1e-9)/r:
-                # periapsis outside the observer: no ray from infinity reaches
-                # here with this impact parameter (inside the photon sphere
-                # only the narrow window of b < b_c looks out)
-                out.append((0.0, 1.0))
-                continue
-            # Phi: from u = 0 to u_p with u = u_p (1 - t^2) (regular integrand)
-            def ph(t, b=b, up=up):
-                u = up*(1.0 - t*t)
-                gu = max(g(u, b), 1e-300)
-                return 2.0*up*t / sqrt(gu)
-            # the limit at t -> 0 from g ~ -g'(u_p) u_p t^2
-            dg = -2.0*up + 3.0*Rs*up*up
-            def ph0(t, b=b, up=up, dg=dg):
-                return ph(t) if t > 1e-6 else 2.0*up / sqrt(max(-dg*up, 1e-300))
-            Phi = _simpson(ph0, 0.0, 1.0)
-            # Psi: from u = 0 (t = 1) to u = 1/r (t_r), same substitution
-            tr2 = 1.0 - 1.0/(r*up)
-            tr = sqrt(max(tr2, 0.0))
-            Psi = _simpson(ph0, tr, 1.0)
-            sweep = (2.0*Phi - Psi) if outgoing else Psi
-        else:
-            # no periapsis: a straight integral in u from 0 to 1/r
-            Psi = _simpson(lambda u, b=b: 1.0/sqrt(max(g(u, b), 1e-300)), 0.0, 1.0/r)
-            sweep = Psi
-        out.append((pi - sweep, 0.0))
+        beta, shadow = _photon_source(Rs, r, r*sin(th)/sf, th < 0.5*pi)
+        out.append((beta, shadow, 1.0/sf))
     return out
+
+
+def rain_table(Rs, r, N=256):
+    """The sky of a 'rain' observer (radial free fall from rest at
+    infinity) at radius r, inside or outside the horizon, in the same form
+    as hole_table.  The rain frame is regular across the horizon, where no
+    static observer exists.  In Painleve-Gullstrand coordinates the rain
+    observer moves at beta = sqrt(Rs/r); a photon of unit energy at
+    infinity with impact parameter b and radial momentum p = +-sqrt(1 -
+    b^2 f/r^2) has, in the rain frame,
+        radial momentum p1 = (beta + p)/f,  energy E = (1 + beta p)/f,
+    which for an ingoing photon (p < 0) is better written without the
+    cancellation at f = 0 as
+        p1 = (b^2/r^2 - 1)/(beta - p),  E = (1 + b^2 beta^2/r^2)/(1 - beta p).
+    The photon is seen at cos(theta) = p1/E from the hole's direction.  The
+    table is built by sampling b on each branch and interpolating onto the
+    uniform theta grid; directions no photon from infinity reaches are the
+    shadow.  Inside the horizon only ingoing photons exist and the sky
+    from infinity fills the cone cos(theta) < sqrt(r/Rs) away from the
+    hole, its edge (b near the capture value) ever more blueshifted."""
+    f = 1.0 - Rs/r
+    bv = sqrt(Rs/r)
+    bc = 1.5*sqrt(3.0)*Rs
+    M = 6*N
+    branches = []
+    # the ingoing branch: b from 0 up to the tangential photon (outside) or
+    # to the limiting direction (inside, b -> infinity)
+    if f > 0.0:
+        bmax = r/sqrt(f)*(1.0 - 1e-12)
+    else:
+        bmax = 2.0e3*r
+    bs = sorted(set([bmax*(i/float(M))**2 for i in range(M + 1)] +
+                    [bc*(1.0 + sg*10.0**-k) for k in range(1, 10) for sg in (-1.0, 1.0)
+                     if 0.0 < bc*(1.0 + sg*10.0**-k) < bmax]))
+    samp = []
+    for b in bs:
+        pr = -sqrt(max(1.0 - b*b*f/(r*r), 0.0))
+        p1 = (b*b/(r*r) - 1.0)/(bv - pr)
+        E = (1.0 + b*b*bv*bv/(r*r))/(1.0 - bv*pr)
+        beta, shadow = _photon_source(Rs, r, b, False)
+        samp.append((max(-1.0, min(1.0, p1/E)), beta, shadow, E))
+    branches.append(samp)
+    if f > 0.0:
+        # the outgoing branch, b from 0 (straight out of the hole) to the
+        # tangential photon
+        bs = sorted(set([bmax*(i/float(M)) for i in range(M + 1)] +
+                        [bc*(1.0 + sg*10.0**-k) for k in range(1, 10) for sg in (-1.0, 1.0)
+                         if 0.0 < bc*(1.0 + sg*10.0**-k) < bmax]))
+        samp = []
+        for b in bs:
+            pr = sqrt(max(1.0 - b*b*f/(r*r), 0.0))
+            p1 = (bv + pr)/f
+            E = (1.0 + bv*pr)/f
+            beta, shadow = _photon_source(Rs, r, b, True)
+            samp.append((max(-1.0, min(1.0, p1/E)), beta, shadow, E))
+        branches.append(samp)
+    out = [None]*N
+    for samp in branches:
+        for (c0, b0, s0, e0), (c1, b1, s1, e1) in zip(samp[:-1], samp[1:]):
+            th0, th1 = acos(c0), acos(c1)
+            lo, hi = min(th0, th1), max(th0, th1)
+            i0 = int(lo/pi*N - 0.5 + 1.0)
+            i1 = int(hi/pi*N - 0.5)
+            for i in range(max(i0, 0), min(i1, N - 1) + 1):
+                th = pi*(i + 0.5)/N
+                t = (th - th0)/(th1 - th0) if hi > lo else 0.0
+                if s0 > 0.5 or s1 > 0.5:
+                    near = (s0, b0, e0) if t < 0.5 else (s1, b1, e1)
+                    out[i] = (near[1], near[0], near[2])
+                else:
+                    out[i] = (b0 + t*(b1 - b0), 0.0, e0 + t*(e1 - e0))
+    return [row if row is not None else (0.0, 1.0, 1.0) for row in out]
 
 
 class Lensing(object):
     THRESHOLD = 2.5e-5      # 2 R_s / D: the Einstein radius is 0.3 degrees here
     TABLE_N = 256
+    # Within this many Schwarzschild radii of a black hole the frame the
+    # ship's velocity, the sky and the bodies are reckoned in is no longer
+    # the static one (whose boost diverges at the horizon, where it ceases
+    # to exist) but the 'rain' frame of radial free fall from rest at
+    # infinity, regular all the way down (see rain_table, Player._geodesic_step).
+    RAIN = 1.001
+    BODY_KMIN, BODY_KMAX = 0.05, 0.1   # R_s/D range over which the thin-lens bending of bodies fades out
     _table_tex = None
     _table_key = None
 
@@ -249,7 +328,8 @@ class Lensing(object):
         Rs = 2.0*body.GM
         cls.current = dict(body=body, D=D, Rs=Rs, R=body.radius, h=(dX.x/n, dX.y/n, dX.z/n),
                            is_hole=body.is_hole, n=bn, u=bu, inv=binv,
-                           cap=2.598 if body.is_hole else cls.capture(body.radius, Rs))
+                           cap=2.598 if body.is_hole else cls.capture(body.radius, Rs),
+                           rain=body.is_hole and D < cls.RAIN*Rs)
 
     @classmethod
     def enlarge(cls, body):
@@ -272,9 +352,68 @@ class Lensing(object):
         thin-lens (D_s - D)/D_s, 0 for anything at or inside the lens's
         distance (the lens itself, its planets and disc)."""
         c = cls.current
-        if c is None or Ds <= c["D"] + 1.5*c["R"]:
+        if c is None or c["rain"] or Ds <= c["D"] + 1.5*c["R"]:
             return 0.0
-        return (Ds - c["D"]) / Ds
+        # The thin lens (small deflection) is only good while the lens is
+        # weak as seen from the ship, R_s/D well below 1; close to a black
+        # hole it would throw the far side of its disc all over the sky.
+        # Bodies then keep their straight-line places (the sky alone is
+        # exact there), fading the bending out between R_s/D = 0.05 and 0.1.
+        k = c["Rs"] / c["D"]
+        fade = max(0.0, min(1.0, (cls.BODY_KMAX - k) / (cls.BODY_KMAX - cls.BODY_KMIN)))
+        return (Ds - c["D"]) / Ds * fade
+
+    @classmethod
+    def apparent(cls, v, w):
+        """Python twin of the vertex shader's bending, for things drawn on
+        the CPU (the navigation markers): v = unit direction toward a source
+        as the ship sees it, w its fraction of the deflection (weight());
+        returns the unit direction of its primary image."""
+        c = cls.current
+        if c is None or w <= 0.0:
+            return v
+        nx, ny, nz = c["n"]; u = c["u"]; inv = c["inv"]
+        k = c["Rs"] / c["D"]
+        hx, hy, hz = c["h"]
+        # to the background frame (lens_to_lab)
+        vx, vy, vz = v
+        cc = vx*nx + vy*ny + vz*nz
+        tpv = 0.5*((vx-nx)**2 + (vy-ny)**2 + (vz-nz)**2) if cc > 0.0 else 1.0 - cc
+        vpar = -cc
+        px, py, pz = -vx - vpar*nx, -vy - vpar*ny, -vz - vpar*nz
+        a = inv*vpar + u*tpv
+        t = inv + u*tpv
+        dx, dy, dz = -(px + a*nx)/t, -(py + a*ny)/t, -(pz + a*nz)/t
+        m = (dx*dx + dy*dy + dz*dz) ** 0.5
+        dx, dy, dz = dx/m, dy/m, dz/m
+        # the primary image (lens_apparent)
+        cb = max(-1.0, min(1.0, dx*hx + dy*hy + dz*hz))
+        beta = math.acos(cb)
+        ex, ey, ez = dx - cb*hx, dy - cb*hy, dz - cb*hz
+        el = (ex*ex + ey*ey + ez*ez) ** 0.5
+        if el >= 1e-6:
+            ex, ey, ez = ex/el, ey/el, ez/el
+            def alpha(th):
+                st = max(math.sin(th), 1e-6)
+                return (2.0*k/st + 2.945*k*k/(st*st)) * 0.5*(1.0 + math.cos(th)) * w
+            th = 0.5*(beta + (beta*beta + 8.0*k*w) ** 0.5)
+            for _ in range(4):
+                f = th - alpha(th) - beta
+                fp = 1.0 - (alpha(th + 1e-4) - alpha(th - 1e-4)) * 5000.0
+                th -= f / max(fp, 0.2)
+                th = max(th, 1e-5)
+            ct, st = math.cos(th), math.sin(th)
+            dx, dy, dz = hx*ct + ex*st, hy*ct + ey*st, hz*ct + ez*st
+        # back to the ship (lens_to_ship)
+        cc = dx*nx + dy*ny + dz*nz
+        tmv = 0.5*((dx+nx)**2 + (dy+ny)**2 + (dz+nz)**2) if cc < 0.0 else 1.0 + cc
+        vpar = -cc
+        px, py, pz = -dx - vpar*nx, -dy - vpar*ny, -dz - vpar*nz
+        a = inv*vpar - u*tmv
+        t = inv + u*tmv
+        vx, vy, vz = -(px + a*nx)/t, -(py + a*ny)/t, -(pz + a*nz)/t
+        m = (vx*vx + vy*vy + vz*vz) ** 0.5
+        return (vx/m, vy/m, vz/m)
 
     @classmethod
     def bind_table(cls, unit=4):
@@ -283,7 +422,7 @@ class Lensing(object):
         c = cls.current
         if c is None or not c["is_hole"]:
             return False
-        key = (c["body"].name, round(c["D"] / c["Rs"], 3) if c["D"] < 1e3*c["Rs"] else None)
+        key = (c["body"].name, round(c["D"] / c["Rs"], 3) if c["D"] < 1e3*c["Rs"] else None, c["rain"])
         if key != cls._table_key or cls._table_tex is None:
             if cls._table_tex is None:
                 cls._table_tex = glGenTextures(1)
@@ -294,10 +433,11 @@ class Lensing(object):
             if key[1] is None:
                 cls._table_key = key
                 return False
-            rows = hole_table(c["Rs"], c["D"], cls.TABLE_N)
+            table = rain_table if c["rain"] else hole_table
+            rows = table(c["Rs"], c["D"], cls.TABLE_N)
             flat = []
-            for beta, shadow in rows:
-                flat += [beta, shadow, 0.0, 1.0]
+            for beta, shadow, freq in rows:
+                flat += [beta, shadow, freq, 1.0]
             glBindTexture(GL_TEXTURE_1D, cls._table_tex)
             glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, cls.TABLE_N, 0, GL_RGBA, GL_FLOAT, (GLfloat*len(flat))(*flat))
             cls._table_key = key

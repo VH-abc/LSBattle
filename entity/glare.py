@@ -30,9 +30,10 @@ context provides, for the only stage that needs more than 8 bits):
      the measured wing of the human glare PSF, plus a faint six-ray starburst
      (ciliary corona) along the same rings.
 """
-from math import cos, sin, pi
+from math import cos, sin, pi, tan, radians
 
 from OpenGL.GL import *
+from program.const import VIEW_ANGLE
 from OpenGL.GL.EXT.framebuffer_object import (glGenFramebuffersEXT, glBindFramebufferEXT, glFramebufferTexture2DEXT,
                                               glCheckFramebufferStatusEXT, glGenerateMipmapEXT,
                                               GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_FRAMEBUFFER_COMPLETE_EXT)
@@ -136,6 +137,7 @@ uniform vec2 size;
 uniform float strength;
 uniform float r0;         // innermost ring radius (pixels)
 uniform float q;          // ring radius ratio
+uniform float rmax;       // rings beyond this radius (pixels) are left out: a limit on the spread
 uniform vec2 dirs[%d];
 void main() {
     vec2 uv = gl_FragCoord.xy / size;
@@ -143,6 +145,7 @@ void main() {
     vec3 star = vec3(0.0);
     float r = r0;
     for (int k = 0; k < %d; k++) {
+        if (r > rmax) break;
         float lod = max(log2(r * 0.7), 0.0);     // blur wide enough that the sample directions do not show
         vec3 ring = vec3(0.0);
         for (int a = 0; a < %d; a++) {
@@ -330,6 +333,15 @@ class Glare(object):
         glUniform1f(glGetUniformLocation(self.p_glare, "strength"), strength)
         glUniform1f(glGetUniformLocation(self.p_glare, "r0"), 2.0)
         glUniform1f(glGetUniformLocation(self.p_glare, "q"), 1.55)
+        # spread limit: degrees of view -> pixels (the ring radius is the
+        # distance light is thrown, before the ring's own blur)
+        deg = BOX.GLARE_SPREAD
+        if deg > 0.0:
+            px_per_deg = 0.5*H / tan(0.5*radians(VIEW_ANGLE)) * (pi/180.0)
+            rmax = deg * px_per_deg
+        else:
+            rmax = 1.0e9
+        glUniform1f(glGetUniformLocation(self.p_glare, "rmax"), rmax)
         self._quad(W, H)
         glActiveTexture(GL_TEXTURE1)
         glBindTexture(GL_TEXTURE_2D, 0)

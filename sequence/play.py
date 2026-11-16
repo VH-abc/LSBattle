@@ -122,6 +122,8 @@ class Play(object):
                         self.world.player.acceleration = BOX.ACCEL
                     elif key == sdl2.SDLK_g:
                         BOX.set_flag("GRID", not BOX.GRID)
+                    elif key == sdl2.SDLK_v:
+                        BOX.toggle_visual()
                     elif key == sdl2.SDLK_l:
                         BOX.set_flag("GLARE", not BOX.GLARE)
                     elif key == sdl2.SDLK_b:
@@ -277,10 +279,17 @@ class Play(object):
                     text += "Time rate: x%.3g of x%g, limited near a body  ([ ])\n"%(BOX.TIME_RATE*rl, BOX.TIME_RATE)
                 else:
                     text += "Time rate: x%g  ([ ])\n"%(BOX.TIME_RATE)
-                if self.world.player.landed is not None:
+                if self.world.player.plunged is not None:
+                    text += "At the singularity of %s: the end\n" % self.world.player.plunged.name
+                elif self.world.player.inside is not None:
+                    text += "Inside the event horizon of %s\n" % self.world.player.inside.name
+                elif self.world.player.landed is not None:
                     text += ("Inside the event horizon of %s\n" if self.world.player.landed.is_hole else "Landed on %s\n") % self.world.player.landed.name
                 if BOX.COLOR_MODE == "ACCURATE":
+                    text += "Visuals: %s  (v)\n" % ("realistic" if BOX.VISUAL == "REALISTIC" else "aesthetic")
                     text += "Exposure: %+.1f EV  (- =)\n"%(log(BOX.EXPOSURE, 2.0))
+                    if BOX.AUTOEXP and BOX.auto_ev < -0.05:
+                        text += "  auto-dimmed by %.1f EV\n" % (-BOX.auto_ev)
                     if BOX.edr_enabled:
                         text += "EDR headroom: x%.1f\n"%(BOX.edr_headroom)
                 text += "Enemy: %i"%(len([e for e in self.world.enemies if e.hp > 0]))

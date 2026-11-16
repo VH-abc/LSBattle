@@ -157,6 +157,7 @@ class Sky(object):
             if (lens_k > 0.0) {
                 dl0 = lens_source(dl0);    // bent round the lens
                 if (dot(dl0, dl0) < 0.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }   // a black hole's shadow
+                if (lens_exact > 0.5) ratio *= lens_gs / g_obs;   // the table's own per-direction frequency factor
             }
             vec3 dl = dl0;
             float pd = dot(sky_p, dl);
@@ -244,7 +245,7 @@ class Sky(object):
         Lensing.set_uniforms(self.program, table_unit=4)
         if self.accurate:
             # ucolor-style scaling acts before the gamma curve: scale^2.2 in linear
-            blackbody.set_uniforms(self.program, BOX.EXPOSURE * scale ** 2.2)
+            blackbody.set_uniforms(self.program, BOX.exposure() * scale ** 2.2)
         glVertexPointer(3, GL_FLOAT, 0, self.vertex)
         glDrawArrays(GL_QUADS, 0, self.n)
         glUseProgram(0)

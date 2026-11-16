@@ -166,7 +166,10 @@ vec3 display(vec3 lin) {
     float m = max(max(lin.r, lin.g), lin.b);
     if (m > disp_max) {
         vec3 c = lin * (disp_max / m);
-        float s = clamp(log2(m / disp_max) * 0.1, 0.0, 1.0);
+        // over-bright: fade to white over 4 stops (a hue held at the display
+        // maximum over a wide range shows a lit planet as a flat disc with a
+        // hard edge at its terminator)
+        float s = clamp(log2(m / disp_max) * 0.25, 0.0, 1.0);
         lin = mix(c, vec3(disp_max), s);
     }
     return linear_to_srgb(lin);

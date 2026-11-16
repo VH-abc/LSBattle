@@ -368,7 +368,7 @@ class Polygon(MqoGpoPolygon):
                     glUniform3f(self.c_light_dir, lx, ly, lz)
                     glUniform1f(self.c_light_on, float(lmode))
                     if self.accurate:
-                        blackbody.set_uniforms(self.program_col, BOX.EXPOSURE, self.temperature, lmode > 0)
+                        blackbody.set_uniforms(self.program_col, BOX.exposure(), self.temperature, lmode > 0)
                     program = self.program_col
             else:
                 glBindTexture(GL_TEXTURE_2D, material.texture_id)
@@ -386,7 +386,7 @@ class Polygon(MqoGpoPolygon):
                     glUniform3f(self.t_light_dir, lx, ly, lz)
                     glUniform1f(self.t_light_on, float(lmode))
                     if self.accurate:
-                        blackbody.set_uniforms(self.program_tex, BOX.EXPOSURE, self.temperature, lmode > 0)
+                        blackbody.set_uniforms(self.program_tex, BOX.exposure(), self.temperature, lmode > 0)
                     program = self.program_tex
             glDrawElements(GL_TRIANGLES, n, GL_UNSIGNED_INT, indices)
         glUseProgram(0)

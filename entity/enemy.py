@@ -360,10 +360,15 @@ class Enemies(object):
         self.enemies.append(Enemy(self.world, x, self.n, typ=typ, level=level))
         self.n += 1
 
+    MAX_ROUNDS = 400     # catch-up steps per frame: a ship at a huge gamma (or deep in a well,
+                         # where coordinate time races) would otherwise take the frame forever
+
     def action(self, ds):
         actor = sorted(self.enemies, key=lambda enemy:enemy.P.X.t)
         score = 0
-        while actor:
+        rounds = 0
+        while actor and rounds < self.MAX_ROUNDS:
+            rounds += 1
             tmp = []
             for enemy in actor:
                 s, flg = enemy.action(ds)

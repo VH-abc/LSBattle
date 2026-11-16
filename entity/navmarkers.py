@@ -18,6 +18,7 @@ from math import pi, tan, atan2, cos, sin, hypot, sqrt
 
 from OpenGL.GL import *
 
+from program.utils.lensing import Lensing
 from program.box import BOX
 from program.const import VIEW_ANGLE
 from program.text import drawSentence, MyFont
@@ -105,7 +106,14 @@ class NavMarkers(object):
             dx = boost.transform_null(Up, dX)   # comoving frame, cancellation-free
             r = -dx.t                           # rest-frame distance
             angle = star.radius / r if r > 0.0 else 1.0
-            v = view.get_rotate([dx.x, dx.y, dx.z])
+            vv = [dx.x, dx.y, dx.z]
+            m = hypot(hypot(vv[0], vv[1]), vv[2])
+            if m > 0.0 and Lensing.current is not None:
+                # bodies beyond a lens are drawn at their bent image
+                w = Lensing.weight(d_lab)
+                if w > 0.0:
+                    vv = list(Lensing.apparent((vv[0]/m, vv[1]/m, vv[2]/m), w))
+            v = view.get_rotate(vv)
             n = hypot(hypot(v[0], v[1]), v[2])
             if n == 0.0:
                 continue
