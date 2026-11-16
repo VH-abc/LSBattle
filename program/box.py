@@ -392,19 +392,22 @@ class _Box(object):
     # Automatic exposure: like an eye adapting, the exposure comes down while
     # the frame's mean brightness is above a target and recovers when the view
     # is dark again, never above the set exposure.  Rates in stops per second.
-    # a bright scene stays bright: the frame's mean is only brought down to
-    # 0.3 of white, by at most 4 stops, and within a fraction of a second
-    AUTO_TARGET = 0.30
+    # Moderately bright scenes are left as they are; a blinding one is
+    # brought down, however bright, only until the frame's mean is about
+    # half of white (dimming starts above 0.6, stops below 0.4), within a
+    # fraction of a second.
+    AUTO_TARGET = 0.50
     AUTO_DOWN, AUTO_UP = 24.0, 12.0
-    AUTO_MAX = 4.0
+    AUTO_MAX = 40.0
 
     def auto_exposure_update(self, mean, dt):
+        self.auto_mean = mean
         if not self.AUTOEXP:
             self.auto_ev = 0.0
             return
-        if mean > self.AUTO_TARGET * 1.5:
-            self.auto_ev -= self.AUTO_DOWN * dt * min(4.0, mean / self.AUTO_TARGET)
-        elif mean < self.AUTO_TARGET * 0.5:
+        if mean > self.AUTO_TARGET * 1.2:
+            self.auto_ev -= self.AUTO_DOWN * dt * min(2.0, mean / self.AUTO_TARGET)
+        elif mean < self.AUTO_TARGET * 0.8:
             self.auto_ev += self.AUTO_UP * dt
         self.auto_ev = max(-self.AUTO_MAX, min(0.0, self.auto_ev))
 
