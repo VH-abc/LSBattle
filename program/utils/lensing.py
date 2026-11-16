@@ -314,6 +314,10 @@ class Lensing(object):
         lens_w, where the program has it: the body's fraction)."""
         c = cls.current
         loc = glGetUniformLocation(program, "lens_w")
+        if table_unit is not None:
+            # always: a sampler1D left on unit 0 beside the program's sampler2D
+            # makes every draw fail with GL_INVALID_OPERATION (no sky at all)
+            glUniform1i(glGetUniformLocation(program, "lens_table"), table_unit)
         if c is None or w <= 0.0:
             glUniform1f(glGetUniformLocation(program, "lens_k"), 0.0)
             if loc >= 0:
@@ -326,7 +330,5 @@ class Lensing(object):
         glUniform1f(glGetUniformLocation(program, "lens_inv"), c["inv"])
         exact = table_unit is not None and cls.bind_table(table_unit)
         glUniform1f(glGetUniformLocation(program, "lens_exact"), 1.0 if exact else 0.0)
-        if table_unit is not None:
-            glUniform1i(glGetUniformLocation(program, "lens_table"), table_unit)
         if loc >= 0:
             glUniform1f(loc, w)
