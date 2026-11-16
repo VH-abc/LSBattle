@@ -32,6 +32,7 @@ class star(Block):
         self.disk_brightness = 100.0
         self.tilt = 23.4
         self.spin = 0.0           # rotation about the pole, degrees: which longitude faces +x
+        self.rotation_period = 0.0  # sidereal rotation period, seconds (negative: retrograde; 0: none)
         self.hp = 1000
         self.primary_star = "sun"
 
@@ -58,6 +59,7 @@ class star(Block):
         self._disk_brightness_func = high_func_num(float, 0.0, 1.0e6)
         self._tilt_func = high_func_num(float, -180, 180)
         self._spin_func = high_func_num(float, -360, 360)
+        self._rotation_period_func = high_func_num(float, -1.0e12, 1.0e12)
         self._hp_func = high_func_num(int, 1, 10**10)
         self._primary_star_func = func_str
 

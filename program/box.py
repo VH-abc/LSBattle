@@ -33,6 +33,7 @@ class _Box(object):
         self.AUTOEXP = False       # lower the exposure automatically while the view is very bright
         self.ADAPTIVE = False      # time rate scales with the local orbital period (TIME_RATE is the rate in low Earth orbit)
         self.rate_factor = 1.0     # the adaptive factor now in force (World.action)
+        self.thrust_factor = 1.0   # and the thrust's (ADAPTIVE: weaker where gravity is weaker)
         self.GLARE_CAP = 0.6       # soft ceiling on the glare veil, fraction of white (0: none)
         self.GLARE_SPREAD = 6.0    # degrees the glare may spread (0: unlimited, the eye's 1/theta^2 wing)
         self.GLARE_GAIN = 4.0      # halo strength multiplier (1: the eye model)
@@ -418,6 +419,18 @@ class _Box(object):
     # ...and never so high that a player-second of held thrust adds more than
     # this much speed (c = 1): relativistic speed within ten seconds, no faster
     ADAPTIVE_VMAX = 0.03
+    # Adaptive thrust: scaled with the local gravity g of the governing body
+    # as (g/G0)^s, G0 the gravity two Earth radii up (where ACCEL applies), so
+    # thrust stays comparable to gravity in every regime; with s below 1 the
+    # thrust-to-gravity ratio still rises slowly where gravity is weak, and
+    # since the time rate rises there too, the speed gained per player-second
+    # still grows with the rate (at 1 AU: 1.3x low orbit's, not 750x).
+    ADAPTIVE_G0 = 8.17e-9
+    ADAPTIVE_S = 0.85
+
+    def thrust(self, base):
+        """The thrust in force for a scripted/set thrust `base`."""
+        return base * (self.thrust_factor if self.ADAPTIVE else 1.0)
 
     def time_rate(self):
         return self.TIME_RATE * (self.rate_factor if self.ADAPTIVE else 1.0)

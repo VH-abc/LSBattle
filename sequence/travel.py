@@ -221,7 +221,10 @@ class Travel(object):
                 text += "       %.3fc\n"%(u)
                 text += "Lorentz factor: %.1f\n"%(g)
                 text += "Thomas rotation: %.1f deg\n"%(self.world.player.wigner_angle*180.0/pi)
-                text += "Accel: %.3g c/s  (, .)\n"%(self.world.player.acceleration)
+                if BOX.ADAPTIVE:
+                    text += "Accel: %.3g c/s adaptive  (, .)\n"%(BOX.thrust(self.world.player.acceleration))
+                else:
+                    text += "Accel: %.3g c/s  (, .)\n"%(self.world.player.acceleration)
                 if BOX.IMPULSE:
                     text += "Booster impulse: %.3g rapidity  (; ')%s\n"%(BOX.IMPULSE_RAPIDITY, "; launches from a surface" if self.world.player.landed is not None else "")
                 fo = getattr(self.world.solar, "obs_shift", 1.0)

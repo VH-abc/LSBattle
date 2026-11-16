@@ -227,7 +227,7 @@ class World(object):
                 n = (nx*nx + ny*ny + nz*nz) ** 0.5
                 if n > 0.0:
                     nx, ny, nz = nx/n, ny/n, nz/n
-        r = body.collision_radius + 1.0e-6
+        r = body.surface_radius(nx, ny, nz) + 1.0e-6
         P.X.x = body.X.x + nx*r; P.X.y = body.X.y + ny*r; P.X.z = body.X.z + nz*r
         P.U.t, P.U.x, P.U.y, P.U.z = body.U.t, body.U.x, body.U.y, body.U.z
         self.player.Xlo[0] = self.player.Xlo[1] = self.player.Xlo[2] = 0.0
@@ -241,16 +241,22 @@ class World(object):
         about a third of a second so a hand-over between bodies is not a jolt."""
         if not BOX.ADAPTIVE:
             BOX.rate_factor = 1.0
+            BOX.thrust_factor = 1.0
             return
         body = self.solar.dominant(self.player.P.X)
         if body is None or body.GM <= 0.0:
             return
         r = max((body.X - self.player.P.X).length(), body.collision_radius)
         T = 2.0*pi * (r*r*r / body.GM) ** 0.5
-        target = max(1.0e-6, min(1.0e12, (T / BOX.ADAPTIVE_T0) ** BOX.ADAPTIVE_P))
-        accel = self.player.acceleration if self.player.acceleration > 0.0 else 1.0e-30
-        target = min(target, BOX.ADAPTIVE_VMAX / (accel * BOX.TIME_RATE))
         k = min(1.0, 3.0*max(dt_real, 0.0))
+        # thrust with the local gravity
+        g = body.GM / (r*r)
+        tf = max(1.0e-9, min(1.0e9, (g / BOX.ADAPTIVE_G0) ** BOX.ADAPTIVE_S))
+        BOX.thrust_factor += (tf - BOX.thrust_factor) * k
+        # time rate with the orbital period, capped by the (adaptive) thrust
+        target = max(1.0e-6, min(1.0e12, (T / BOX.ADAPTIVE_T0) ** BOX.ADAPTIVE_P))
+        accel = BOX.thrust(self.player.acceleration) if self.player.acceleration > 0.0 else 1.0e-30
+        target = min(target, BOX.ADAPTIVE_VMAX / (accel * BOX.TIME_RATE))
         BOX.rate_factor += (target - BOX.rate_factor) * k if BOX.rate_factor > 0.0 else target
 
     def _auto_exposure(self):

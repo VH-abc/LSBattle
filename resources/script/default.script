@@ -225,6 +225,7 @@ World {
                 temperature = 5778.0        # float 100.0<=x<=1000000000.0
                 brightness = 1.0        # float 0.0<=x<=1000000.0
                 tilt = 3.0              # float -180<=x<=180
+                rotation_period = -20997000.0   # 243 days, retrograde
             }
             star {
                 hp = 1000                # int 1<=x<=10000000000
@@ -240,6 +241,7 @@ World {
                 temperature = 5778.0        # float 100.0<=x<=1000000000.0
                 brightness = 1.0        # float 0.0<=x<=1000000.0
                 tilt = 25.0              # float -180<=x<=180
+                rotation_period = 88643.0
             }
             star {
                 hp = 5000                # int 1<=x<=10000000000
@@ -256,6 +258,7 @@ World {
                 temperature = 5778.0        # float 100.0<=x<=1000000000.0
                 brightness = 1.0        # float 0.0<=x<=1000000.0
                 tilt = 3.0              # float -180<=x<=180
+                rotation_period = 35730.0
             }
             star {
                 hp = 5000                # int 1<=x<=10000000000
@@ -273,6 +276,7 @@ World {
                 temperature = 5778.0        # float 100.0<=x<=1000000000.0
                 brightness = 1.0        # float 0.0<=x<=1000000.0
                 tilt = 27.0              # float -180<=x<=180
+                rotation_period = 38362.0
             }
             star {
                 hp = 10000000000                # int 1<=x<=10000000000
@@ -696,6 +700,7 @@ World {
                 brightness = 1.0        # float 0.0<=x<=1000000.0
                 spin = 270.0             # longitude facing +x: the Americas face the spawn point
                 tilt = 23.4              # float -180<=x<=180
+                rotation_period = 86164.0       # sidereal day
             }
             star {
                 hp = 1000                # int 1<=x<=10000000000
@@ -710,6 +715,7 @@ World {
                 temperature = 5778.0        # float 100.0<=x<=1000000000.0
                 brightness = 132.0        # sRGB units; = (R_sun/1AU)^(-2/2.2): sunlit white at 1 AU = display white  # float 0.0<=x<=1000000.0
                 tilt = 0.0               # float -180<=x<=180
+                rotation_period = 2164320.0     # 25 days
             }
             star {
                 hp = 1000                # int 1<=x<=10000000000
@@ -725,6 +731,7 @@ World {
                 temperature = 5778.0        # float 100.0<=x<=1000000000.0
                 brightness = 1.0        # float 0.0<=x<=1000000.0
                 tilt = 0.0               # float -180<=x<=180
+                rotation_period = 2360592.0     # tidally locked: the sidereal month
             }
         }
     }

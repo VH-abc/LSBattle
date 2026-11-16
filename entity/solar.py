@@ -83,6 +83,16 @@ class Star(object):
         else:
             self.ring = None
         self.solid = int(getattr(star_data, "solid", 1)) != 0
+        # rotation about the body's own axis: sidereal period in seconds
+        # (negative: retrograde; 0: none); the axis in model space is the
+        # pole, or the model's y axis tilted as the texture was
+        self.rotation_period = float(getattr(star_data, "rotation_period", 0.0))
+        if pole is not None:
+            n = (pole[0]**2 + pole[1]**2 + pole[2]**2) ** 0.5
+            self.spin_axis = (pole[0]/n, pole[1]/n, pole[2]/n)
+        else:
+            ax = Matrix44.z_rotation(star_data.tilt*pi/180).get_rotate([0.0, 1.0, 0.0])
+            self.spin_axis = (ax[0], ax[1], ax[2])
         lit = getattr(star_data, "lit_by", "") or ""
         self.lit_by = lit.lower() if lit.lower() not in ("", "none", "null") else None
         self.system = None          # set by SolarSystem
@@ -126,6 +136,19 @@ class Star(object):
                            psize=flame_data.size*self.radius)
         self.alive = True
         self.X_dead = None
+
+    def surface_radius(self, dx, dy, dz):
+        """Distance from the centre to the drawn surface along direction
+        (dx, dy, dz): the ellipsoid, not the collision sphere (its short
+        axis), so a ship put on the surface is never inside the globe."""
+        n = (dx*dx + dy*dy + dz*dz) ** 0.5
+        if n <= 0.0 or self.flattening <= 0.0:
+            return self.radius
+        px, py, pz = self.pole
+        par = (dx*px + dy*py + dz*pz) / n
+        perp2 = max(0.0, 1.0 - par*par)
+        k = max(1e-6, 1.0 - self.flattening)
+        return 1.0 / (perp2 + par*par/(k*k)) ** 0.5 * self.radius
 
     def depth(self, Xp):
         """Normalised distance from the centre in units of this body's own
@@ -264,6 +287,11 @@ class Star(object):
                 X = Xc
                 R = Matrix44()
                 Rg = Matrix44.scale(enlarge) if enlarge != 1.0 else R
+            if self.rotation_period != 0.0:
+                # the globe turns about its axis: the phase at the retarded time
+                t_ret = Xp.t - (Xc - Xp).length()
+                phase = (2.0*pi * t_ret / self.rotation_period) % (2.0*pi)
+                Rg = Rg * Quaternion.from_ax(phase, Vector3(*self.spin_axis)).get_RotMat()
             # only the globe is enlarged (a lensed body's apparent size), not its disc or ring
             if not hide_globe:
                 self.model.draw(Xp, L, LL, X=X, U=U, R=Rg, scale=scale, gshift=gshift)
@@ -524,7 +552,7 @@ class SolarSystem(object):
             if lo is not None:
                 dx += lo[0]; dy += lo[1]; dz += lo[2]
             r = (dx*dx + dy*dy + dz*dz) ** 0.5
-            Rc = star.collision_radius + margin
+            Rc = star.surface_radius(dx, dy, dz) + margin
             if r <= Rc*(1.0 + 1.0e-7) and r > 0.0:
                 k = Rc / r
                 dx *= k; dy *= k; dz *= k

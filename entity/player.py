@@ -267,10 +267,11 @@ class Player(object):
         if self.planar:
             ac.y = 0.0
 
+        a = BOX.thrust(self.acceleration)
         if keys.k_booster:
-            ac.normalize(self.acceleration * script.player.turbo)
+            ac.normalize(a * script.player.turbo)
         else:
-            ac.normalize(self.acceleration)
+            ac.normalize(a)
         if brake_limit is not None and ac.length() > brake_limit:
             ac.normalize(brake_limit)
         return ac
@@ -697,6 +698,9 @@ class Player(object):
             self.time += ds
             return
 
+        if self.landed is not None and keys.k_booster and not BOX.IMPULSE:
+            # held-booster mode: from a surface the booster is the launch
+            keys.k_impulse = 1
         if self.landed is not None and self.landed.hp > 0 and not (
                 keys.k_accel or keys.k_impulse or keys.k_brake or keys.k_orbit):
             # At rest on a body with no thrust commanded: ride with it.  A
@@ -717,15 +721,36 @@ class Player(object):
             # impulse booster: a fixed rapidity kick along the ship's axis,
             # applied as an exact boost in this substep (Wigner rotation too)
             keys.k_impulse = 0
-            fwd = self.quaternion.get_RotMat().forward
+            fwd = self.quaternion.get_RotMat().forward       # the kick is along -forward (the nose)
             eta = BOX.IMPULSE_RAPIDITY
             if self.landed is not None and self.landed.GM > 0.0 and not self.landed.is_hole:
                 # launch: from a surface the tap is at least 1.15x the orbital
                 # speed there, along the nose (an ellipse from the surface out
                 # to about 1.6 radii), where a weak orbital booster could not
-                # even lift off
+                # even lift off.  A nose below the horizon (the landed attitude
+                # has it on the body) launches along the horizon instead.
                 R = max(self.landed.collision_radius, 1.0e-30)
                 eta = max(eta, 1.15 * (self.landed.GM / R) ** 0.5)
+                b = self.landed.X; lo = self.Xlo
+                ux, uy, uz = self.P.X.x - b.x + lo[0], self.P.X.y - b.y + lo[1], self.P.X.z - b.z + lo[2]
+                un = (ux*ux + uy*uy + uz*uz) ** 0.5
+                if un > 0.0:
+                    ux, uy, uz = ux/un, uy/un, uz/un
+                    kx, ky, kz = -fwd.x, -fwd.y, -fwd.z           # the nose
+                    up = kx*ux + ky*uy + kz*uz
+                    smin = math.sin(math.radians(15.0))
+                    if up < smin:
+                        # at least 15 degrees above the horizon: a level launch
+                        # dips a few metres in its first step, back under the
+                        # landing threshold
+                        hx, hy, hz = kx - up*ux, ky - up*uy, kz - up*uz
+                        hn = (hx*hx + hy*hy + hz*hz) ** 0.5
+                        cmin = (1.0 - smin*smin) ** 0.5
+                        if hn > 1e-9:
+                            kx, ky, kz = cmin*hx/hn + smin*ux, cmin*hy/hn + smin*uy, cmin*hz/hn + smin*uz
+                        else:
+                            kx, ky, kz = ux, uy, uz
+                        fwd = Vector3(-kx, -ky, -kz)
             acceleration -= Vector4D.from_tv(0.0, fwd) * (eta / ds)
         repulsion = Vector4D()
         self.calc_repulsion(repulsion)
@@ -773,6 +798,11 @@ class Player(object):
             # gravitational time dilation (first order): coordinate time runs
             # faster than the ship's clock by (1 + phi)
             self.P.X.t += phi * self.P.U.t * ds
+        # contact is checked against the bodies where they are now, at the
+        # ship's new time: against their start-of-step positions a ship that
+        # moves with a planet at 30 km/s is tens of km off after one step,
+        # and a fresh launch was put back on the surface
+        self.world.solar.update(self.P.X.t)
         self.landed = self.world.solar.land(self.P, 1.0e-6, self.Xlo)   # 300 m above the surface
         if self.landed is not None:
             self._rest_offset()
