@@ -96,7 +96,15 @@ class NavMarkers(object):
         for star in self.solar.stars.values():
             if star.hp <= 0:
                 continue
-            dX = star.X - Xp
+            Xc = star.X
+            if star.orbit is not None and BOX.ORBITS:
+                # where the body is drawn: its position when the light we
+                # see left it (one light-cone iteration, as Star._draw_globe)
+                t_ret = Xp.t - (star.X - Xp).length()
+                Xc, _ = self.solar.state_at(star, t_ret)
+            dX = Xc - Xp
+            lo = getattr(self.solar, "player_lo", (0.0, 0.0, 0.0))
+            dX.x -= lo[0]; dX.y -= lo[1]; dX.z -= lo[2]
             d_lab = dX.length()
             if not getattr(star, "solid", True) and d_lab < star.radius:
                 continue
