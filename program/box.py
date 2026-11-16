@@ -31,9 +31,9 @@ class _Box(object):
         self.HDR = False           # request a float framebuffer + macOS EDR
         self.EXPOSURE = 1.0        # multiplier used by the accurate colour mode
         self.AUTOEXP = False       # lower the exposure automatically while the view is very bright
-        self.GLARE_CAP = 0.3       # soft ceiling on the glare veil, fraction of white (0: none)
-        self.GLARE_SPREAD = 5.0    # degrees the glare may spread (0: unlimited, the eye's 1/theta^2 wing)
-        self.VISUAL = "AESTHETIC"  # "REALISTIC" (eye model throughout) or "AESTHETIC" (auto exposure, limited glare)
+        self.GLARE_CAP = 0.4       # soft ceiling on the glare veil, fraction of white (0: none)
+        self.GLARE_SPREAD = 20.0   # degrees the glare may spread (0: unlimited, the eye's 1/theta^2 wing)
+        self.VISUAL = "COMFORTABLE"  # "REALISTIC" (eye model throughout) or "COMFORTABLE" (auto exposure, limited glare)
         self.auto_ev = 0.0         # the automatic reduction now in force, stops (<= 0)
         self.GRID = True           # show the background grid with the HUD
         self.BRAKE = True          # allow the brake (retro-thrust) key
@@ -90,6 +90,8 @@ class _Box(object):
                     self.GLARE_CAP = float(v)
                 elif w == "VISUAL":
                     self.VISUAL = v.strip().upper()
+                    if self.VISUAL == "AESTHETIC":      # the old name
+                        self.VISUAL = "COMFORTABLE"
                 elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
                     setattr(self, w, (v == "True"))
             if (X, Y) not in disp_sizes:
@@ -361,8 +363,8 @@ class _Box(object):
 
     def set_visual(self, mode):
         """REALISTIC: the eye model throughout (glare wing unlimited and
-        uncapped); AESTHETIC: glare limited to 5 degrees and its veil soft-
-        capped at 0.3 of white, so a screen-filling sun is still full white
+        uncapped); COMFORTABLE: glare limited to 20 degrees and its veil soft-
+        capped at 0.4 of white, so a screen-filling sun is still full white
         (EDR peak with HDR on) but its glare cannot swamp the rest of the
         view.  Automatic exposure stays a separate option, off in both."""
         self.VISUAL = mode
@@ -371,12 +373,12 @@ class _Box(object):
             self.GLARE_SPREAD = 0.0
             self.GLARE_CAP = 0.0
         else:
-            self.GLARE_SPREAD = 5.0
-            self.GLARE_CAP = 0.3
+            self.GLARE_SPREAD = 20.0
+            self.GLARE_CAP = 0.4
         self.SAVE = True
 
     def toggle_visual(self):
-        self.set_visual("AESTHETIC" if self.VISUAL == "REALISTIC" else "REALISTIC")
+        self.set_visual("COMFORTABLE" if self.VISUAL == "REALISTIC" else "REALISTIC")
 
     GLARE_SPREADS = (0.0, 20.0, 10.0, 5.0, 2.0)
 

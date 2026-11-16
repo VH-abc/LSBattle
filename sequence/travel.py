@@ -239,7 +239,7 @@ class Travel(object):
                 elif self.world.player.landed is not None:
                     text += ("Inside the event horizon of %s\n" if self.world.player.landed.is_hole else "Landed on %s\n") % self.world.player.landed.name
                 if BOX.COLOR_MODE == "ACCURATE":
-                    text += "Visuals: %s  (v)\n" % ("realistic" if BOX.VISUAL == "REALISTIC" else "aesthetic")
+                    text += "Visuals: %s  (v)\n" % ("realistic" if BOX.VISUAL == "REALISTIC" else "comfortable")
                     text += "Exposure: %+.1f EV  (- =)\n"%(log(BOX.EXPOSURE, 2.0))
                     if BOX.AUTOEXP and BOX.auto_ev < -0.05:
                         text += "  auto-dimmed by %.1f EV\n" % (-BOX.auto_ev)
