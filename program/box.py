@@ -407,10 +407,14 @@ class _Box(object):
         self.SAVE = True
 
     # Adaptive time rate: the simulated seconds per real second scale with the
-    # orbital period at the ship's distance from the body that governs it, so
-    # TIME_RATE means "this rate two Earth radii up" (an orbit there is 13,700 s)
-    # and the pace stays the same in every orbit, at the Moon or between planets.
+    # orbital period T at the ship's distance from the body that governs it,
+    # as (T/T0)^p with T0 the period two Earth radii up (13,700 s; TIME_RATE is
+    # the rate there) and p below 1: a longer orbit still takes longer in
+    # player time, but very sublinearly.  With p = 0.7 a low Earth orbit at
+    # rate 1100 takes 12 s, the Moon's about a minute, Earth's about the Sun
+    # two minutes (12 s with p = 1, which felt too fast).
     ADAPTIVE_T0 = 13700.0
+    ADAPTIVE_P = 0.7
 
     def time_rate(self):
         return self.TIME_RATE * (self.rate_factor if self.ADAPTIVE else 1.0)
