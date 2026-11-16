@@ -139,6 +139,7 @@ uniform float r0;         // innermost ring radius (pixels)
 uniform float q;          // ring radius ratio
 uniform float rmax;       // rings beyond this radius (pixels) are left out: a limit on the spread
 uniform float gcap;       // soft ceiling on the glare added to a pixel, linear (1 = white); 0: none
+uniform float gslope;     // extra falloff: ring weight (r0/r)^gslope (0: the eye's 1/theta^2 wing)
 uniform vec2 dirs[%d];
 void main() {
     vec2 uv = gl_FragCoord.xy / size;
@@ -149,7 +150,7 @@ void main() {
         if (r > rmax) break;
         // rings fade out over the last octave below the spread limit (a hard
         // cut leaves the blurred last ring's square footprint)
-        float wk = clamp((rmax - r) / (0.5 * rmax), 0.0, 1.0);
+        float wk = clamp((rmax - r) / (0.5 * rmax), 0.0, 1.0) * pow(r0 / r, gslope);
         float lod = max(log2(r * 0.7), 0.0);     // blur wide enough that the sample directions do not show
         vec3 ring = vec3(0.0);
         for (int a = 0; a < %d; a++) {
@@ -349,6 +350,7 @@ class Glare(object):
             rmax = 1.0e9
         glUniform1f(glGetUniformLocation(self.p_glare, "rmax"), rmax)
         glUniform1f(glGetUniformLocation(self.p_glare, "gcap"), BOX.GLARE_CAP)
+        glUniform1f(glGetUniformLocation(self.p_glare, "gslope"), BOX.GLARE_SLOPE)
         self._quad(W, H)
         glActiveTexture(GL_TEXTURE1)
         glBindTexture(GL_TEXTURE_2D, 0)

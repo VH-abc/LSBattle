@@ -33,7 +33,8 @@ class _Box(object):
         self.AUTOEXP = False       # lower the exposure automatically while the view is very bright
         self.GLARE_CAP = 0.6       # soft ceiling on the glare veil, fraction of white (0: none)
         self.GLARE_SPREAD = 6.0    # degrees the glare may spread (0: unlimited, the eye's 1/theta^2 wing)
-        self.GLARE_GAIN = 2.0      # halo strength multiplier (1: the eye model)
+        self.GLARE_GAIN = 4.0      # halo strength multiplier (1: the eye model)
+        self.GLARE_SLOPE = 1.0     # extra falloff of the halo with angle (0: the eye model)
         self.VISUAL = "COMFORTABLE"  # "REALISTIC" (eye model throughout) or "COMFORTABLE" (auto exposure, limited glare)
         self.auto_ev = 0.0         # the automatic reduction now in force, stops (<= 0)
         self.GRID = True           # show the background grid with the HUD
@@ -91,6 +92,8 @@ class _Box(object):
                     self.GLARE_CAP = float(v)
                 elif w == "GLARE_GAIN":
                     self.GLARE_GAIN = float(v)
+                elif w == "GLARE_SLOPE":
+                    self.GLARE_SLOPE = float(v)
                 elif w == "VISUAL":
                     self.VISUAL = v.strip().upper()
                     if self.VISUAL == "AESTHETIC":      # the old name
@@ -366,9 +369,10 @@ class _Box(object):
 
     def set_visual(self, mode):
         """REALISTIC: the eye model throughout (glare wing unlimited and
-        uncapped); COMFORTABLE: glare kept within 6 degrees but twice as
-        strong close in, its veil soft-capped at 0.6 of white, so a
-        screen-filling sun is still full white
+        uncapped); COMFORTABLE: glare kept within 6 degrees, falling off
+        a power faster than the eye's wing and four times as strong at the
+        limb, its veil soft-capped at 0.6 of white, so a screen-filling sun
+        is still full white
         (EDR peak with HDR on) but its glare cannot swamp the rest of the
         view.  Automatic exposure stays a separate option, off in both."""
         self.VISUAL = mode
@@ -377,10 +381,12 @@ class _Box(object):
             self.GLARE_SPREAD = 0.0
             self.GLARE_CAP = 0.0
             self.GLARE_GAIN = 1.0
+            self.GLARE_SLOPE = 0.0
         else:
             self.GLARE_SPREAD = 6.0
             self.GLARE_CAP = 0.6
-            self.GLARE_GAIN = 2.0
+            self.GLARE_GAIN = 4.0
+            self.GLARE_SLOPE = 1.0
         self.SAVE = True
 
     def toggle_visual(self):
@@ -551,6 +557,7 @@ class _Box(object):
                 f.write("GLARE_SPREAD=%r\n"%self.GLARE_SPREAD)
                 f.write("GLARE_CAP=%r\n"%self.GLARE_CAP)
                 f.write("GLARE_GAIN=%r\n"%self.GLARE_GAIN)
+                f.write("GLARE_SLOPE=%r\n"%self.GLARE_SLOPE)
                 f.write("VISUAL=%s\n"%self.VISUAL)
                 for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
                     f.write("%s=%s\n"%(name, getattr(self, name)))
