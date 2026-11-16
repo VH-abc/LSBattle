@@ -439,7 +439,7 @@ class SolarSystem(object):
             r = max(r, 0.01*star.collision_radius if star.is_hole else star.collision_radius)
             if r > 1.0e30:
                 continue                      # no gravity to speak of out there
-            t = 0.005 * r * (r / star.GM) ** 0.5
+            t = 0.002 * r * (r / star.GM) ** 0.5     # 0.005 let a circular orbit wobble by 2.6%
             if umag > 0.0 and r < self.STRONG_FIELD * 2.0 * star.GM:
                 t = min(t, 0.02 * r / umag)
             if t < best:

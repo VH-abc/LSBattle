@@ -679,9 +679,16 @@ class Player(object):
     
     def action(self, keys, ds):
         assert(self.i == id(self.P.X))
-        # the pilot turns the ship in real time, whatever the simulation rate
-        self.change_direction(keys, ds / BOX.TIME_RATE)
-        self.look_toward(keys, ds / BOX.TIME_RATE)
+        # the pilot turns the ship in real time, whatever the simulation rate:
+        # the frame's real time, handed over once by World.action (a frame
+        # whose simulated time is cut short near a body still turns fully)
+        dt_turn = getattr(self, "turn_budget", None)
+        if dt_turn is None:
+            dt_turn = ds / BOX.time_rate()
+        self.turn_budget = 0.0
+        if dt_turn > 0.0:
+            self.change_direction(keys, dt_turn)
+            self.look_toward(keys, dt_turn)
 
         self.guns[self.state.gun_mode].gun_action(keys, ds)
 

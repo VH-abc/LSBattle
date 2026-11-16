@@ -92,6 +92,10 @@ class World(object):
         # When the substep budget runs out the simulated time per frame is
         # cut short (rate_limit < 1 tells the HUD).
         self.rate_limit = 1.0
+        # The pilot turns in real time: the whole frame's real time goes to
+        # the first substep's turn, however the simulated time is cut or split
+        self.player.turn_budget = ds / BOX.time_rate()
+        self._adapt_rate(ds / BOX.time_rate())
         # Approach limiter: at a high time rate one frame can carry the ship
         # past a target, so the step is cut to the proper time in which the
         # ship closes 30% of the distance to the nearest body.  Only while
@@ -230,6 +234,22 @@ class World(object):
         self.player.landed = body
         self.player._rest_offset()
         return True
+
+    def _adapt_rate(self, dt_real):
+        """Adaptive time rate: the factor for the next frame from the orbital
+        period at the ship's distance from its governing body, smoothed over
+        about a third of a second so a hand-over between bodies is not a jolt."""
+        if not BOX.ADAPTIVE:
+            BOX.rate_factor = 1.0
+            return
+        body = self.solar.dominant(self.player.P.X)
+        if body is None or body.GM <= 0.0:
+            return
+        r = max((body.X - self.player.P.X).length(), body.collision_radius)
+        T = 2.0*pi * (r*r*r / body.GM) ** 0.5
+        target = max(1.0e-6, min(1.0e12, T / BOX.ADAPTIVE_T0))
+        k = min(1.0, 3.0*max(dt_real, 0.0))
+        BOX.rate_factor += (target - BOX.rate_factor) * k if BOX.rate_factor > 0.0 else target
 
     def _auto_exposure(self):
         """Mean brightness of the drawn frame (its top mip level), fed to

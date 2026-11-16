@@ -31,6 +31,8 @@ class _Box(object):
         self.HDR = False           # request a float framebuffer + macOS EDR
         self.EXPOSURE = 1.0        # multiplier used by the accurate colour mode
         self.AUTOEXP = False       # lower the exposure automatically while the view is very bright
+        self.ADAPTIVE = False      # time rate scales with the local orbital period (TIME_RATE is the rate in low Earth orbit)
+        self.rate_factor = 1.0     # the adaptive factor now in force (World.action)
         self.GLARE_CAP = 0.6       # soft ceiling on the glare veil, fraction of white (0: none)
         self.GLARE_SPREAD = 6.0    # degrees the glare may spread (0: unlimited, the eye's 1/theta^2 wing)
         self.GLARE_GAIN = 4.0      # halo strength multiplier (1: the eye model)
@@ -98,7 +100,7 @@ class _Box(object):
                     self.VISUAL = v.strip().upper()
                     if self.VISUAL == "AESTHETIC":      # the old name
                         self.VISUAL = "COMFORTABLE"
-                elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
+                elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP", "ADAPTIVE"):
                     setattr(self, w, (v == "True"))
             if (X, Y) not in disp_sizes:
                 X, Y = disp_sizes[0]
@@ -404,6 +406,15 @@ class _Box(object):
         self.GLARE_SPREAD = opts[(i + 1) % len(opts)]
         self.SAVE = True
 
+    # Adaptive time rate: the simulated seconds per real second scale with the
+    # orbital period at the ship's distance from the body that governs it, so
+    # TIME_RATE means "this rate two Earth radii up" (an orbit there is 13,700 s)
+    # and the pace stays the same in every orbit, at the Moon or between planets.
+    ADAPTIVE_T0 = 13700.0
+
+    def time_rate(self):
+        return self.TIME_RATE * (self.rate_factor if self.ADAPTIVE else 1.0)
+
     def exposure(self):
         """The exposure in force: the setting, reduced by the automatic
         adaptation when that is on."""
@@ -470,7 +481,7 @@ class _Box(object):
                     k = k.upper()
                     if k in ("ACCEL", "TIME_RATE", "EXPOSURE", "IMPULSE_RAPIDITY"):
                         vals[k] = float(v)
-                    elif k in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
+                    elif k in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP", "ADAPTIVE"):
                         vals[k] = v.lower() in ("1", "true", "on", "yes")
                     elif k == "COLOR_MODE":
                         vals[k] = v.upper()
@@ -559,7 +570,7 @@ class _Box(object):
                 f.write("GLARE_GAIN=%r\n"%self.GLARE_GAIN)
                 f.write("GLARE_SLOPE=%r\n"%self.GLARE_SLOPE)
                 f.write("VISUAL=%s\n"%self.VISUAL)
-                for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP"):
+                for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP", "ADAPTIVE"):
                     f.write("%s=%s\n"%(name, getattr(self, name)))
                 f.close()
             except:

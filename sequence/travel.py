@@ -179,7 +179,7 @@ class Travel(object):
             dt = tick - last_tick
             if dt == 0:
                 dt = 1
-            ds = dt * 0.001 * BOX.TIME_RATE
+            ds = dt * 0.001 * BOX.time_rate()
             last_tick = tick
             fps.add(ds)
             total_time += ds
@@ -228,8 +228,11 @@ class Travel(object):
                 if abs(fo - 1.0) > 1e-4:
                     text += "Gravitational blueshift: x%.4g\n" % fo
                 rl = getattr(self.world, "rate_limit", 1.0)
+                tr = BOX.time_rate()
                 if rl < 0.999:
-                    text += "Time rate: x%.3g of x%g, limited near a body  ([ ])\n"%(BOX.TIME_RATE*rl, BOX.TIME_RATE)
+                    text += "Time rate: x%.3g of x%.3g, limited near a body  ([ ])\n"%(tr*rl, tr)
+                elif BOX.ADAPTIVE:
+                    text += "Time rate: x%.3g adaptive  ([ ])\n"%(tr)
                 else:
                     text += "Time rate: x%g  ([ ])\n"%(BOX.TIME_RATE)
                 if self.world.player.plunged is not None:
