@@ -415,6 +415,9 @@ class _Box(object):
     # two minutes (12 s with p = 1, which felt too fast).
     ADAPTIVE_T0 = 13700.0
     ADAPTIVE_P = 0.7
+    # ...and never so high that a player-second of held thrust adds more than
+    # this much speed (c = 1): relativistic speed within ten seconds, no faster
+    ADAPTIVE_VMAX = 0.03
 
     def time_rate(self):
         return self.TIME_RATE * (self.rate_factor if self.ADAPTIVE else 1.0)

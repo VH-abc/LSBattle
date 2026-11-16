@@ -248,6 +248,8 @@ class World(object):
         r = max((body.X - self.player.P.X).length(), body.collision_radius)
         T = 2.0*pi * (r*r*r / body.GM) ** 0.5
         target = max(1.0e-6, min(1.0e12, (T / BOX.ADAPTIVE_T0) ** BOX.ADAPTIVE_P))
+        accel = self.player.acceleration if self.player.acceleration > 0.0 else 1.0e-30
+        target = min(target, BOX.ADAPTIVE_VMAX / (accel * BOX.TIME_RATE))
         k = min(1.0, 3.0*max(dt_real, 0.0))
         BOX.rate_factor += (target - BOX.rate_factor) * k if BOX.rate_factor > 0.0 else target
 
