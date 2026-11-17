@@ -34,6 +34,7 @@ class _Box(object):
         self.ADAPTIVE = False      # time rate scales with the local orbital period (TIME_RATE is the rate in low Earth orbit)
         self.SOUND = True          # the mixer (music Doppler-shifted from the home star, thrust, clocks, sky)
         self.VOLUME = 0.5
+        self.music_credit = os.path.exists(os.path.join(CONFIG_DIR, "..", "sound", "music.wav"))   # the licensed track is present
         self.rate_factor = 1.0     # the adaptive factor now in force (World.action)
         self.thrust_factor = 1.0   # and the thrust's (ADAPTIVE: weaker where gravity is weaker)
         self.boost_factor = 1.0    # and the booster's (ADAPTIVE: a fixed fraction of the local orbital speed)

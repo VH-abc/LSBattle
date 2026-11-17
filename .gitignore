@@ -6,3 +6,5 @@ resources/config/setting.ini
 build/
 hang.log
 gl.log
+resources/sound/*.mp3
+resources/sound/*.wav

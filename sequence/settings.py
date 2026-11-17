@@ -55,7 +55,8 @@ class Settings(object):
                                      if BOX.IMPULSE else "hold = continuous turbo"),
                 "Gravitational lensing near compact bodies: %s" % ("On" if BOX.LENSING else "Off"),
                 "Turning inertia (arrow keys): %s" % ("On: accelerate, coast, damp" if BOX.INERTIA else "Off: fixed rate, instant stop"),
-                "Sound: %s  (in game: m; volume with <- ->)" % (("On, volume %d%%" % round(100*BOX.VOLUME)) if BOX.SOUND else "Off"),
+                "Sound: %s%s" % (("On, volume %d%%" % round(100*BOX.VOLUME)) if BOX.SOUND else "Off",
+                                "  [music: Bathed in the Light, Kevin MacLeod (incompetech.com), CC BY]" if BOX.music_credit else "  (in game: m)"),
                 "Travel to: %s  (<- -> choose; Enter: go there, apply its preset, start in orbit)%s" % (
                     BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)][0], "" if self.world is not None else "  [in game only]")]
 

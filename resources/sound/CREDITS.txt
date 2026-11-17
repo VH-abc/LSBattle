@@ -1,0 +1,10 @@
+Background music
+
+"Bathed in the Light" by Kevin MacLeod (incompetech.com)
+Licensed under Creative Commons: By Attribution 4.0 License
+http://creativecommons.org/licenses/by/4.0/
+
+The game plays resources/sound/music.wav when present (any 16-bit PCM WAV),
+else a chiptune loop it generates itself.  The track above is the one
+Velocity Raptor (TestTubeGames) uses for its levels, as its author said:
+https://news.ycombinator.com/item?id=9247460
