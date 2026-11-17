@@ -11,8 +11,8 @@ sounds that carry the physics the game already computes.
   quickens, away it drops and drags, near a black hole it is blueshifted,
   and inside the horizon it dies away.  The track is resources/sound/
   music.wav when present, else a chiptune loop written here at start-up.
-* The ship's own sounds, unshifted since they are in its frame: a thrust
-  hum whose pitch follows the thrust in force, and the booster's thump.
+* The ship's own sound, unshifted since it is in its frame: a thrust hum
+  whose pitch follows the thrust in force.
 * Two clocks: a tick for every second of the ship's proper time, and a
   higher tick for every second of world time, rate-limited, so the two
   are heard to diverge when time runs slow for the ship.
@@ -174,7 +174,6 @@ class Audio(object):
         self.pos = 0.0
         self.hum_phase = 0.0
         self.hum_amp = 0.0
-        self.thump = None          # remaining samples of the booster thump
         self.tick_p = 0.0          # player seconds since the last proper tick
         self.tick_w = 0.0          # world seconds since the last world tick
         self.hiss_state = 0.0
@@ -245,8 +244,6 @@ class Audio(object):
         on = bool(keys and (keys.k_accel or keys.k_booster)) and pl.plunged is None
         s["thrust_on"] = on
         s["thrust"] = BOX.thrust(pl.acceleration) * (3.0 if (keys and keys.k_booster) else 1.0)
-        s["boost"] = getattr(pl, "boost_fired", False)
-        pl.boost_fired = False
         # clocks: world seconds per player second
         s["world_rate"] = BOX.time_rate() * g * getattr(world, "rate_limit", 1.0)
         # the blueshift ahead: cosmic background temperature factor gamma (1 + beta)
@@ -289,16 +286,6 @@ class Audio(object):
         env = np.linspace(self.hum_amp, amp, n)
         self.hum_amp = amp
         out += (np.sin(ph) + 0.4 * np.sin(2.0 * ph) + 0.2 * np.sin(3.0 * ph)) * env
-        # the booster's thump
-        if s["boost"]:
-            tt = np.arange(int(0.35 * RATE)) / float(RATE)
-            fk = 35.0 + 90.0 * np.exp(-tt * 25.0)
-            self.thump = (0.8 * np.sin(2.0 * np.pi * np.cumsum(fk) / RATE) * np.exp(-tt * 9.0)
-                          + 0.3 * self.rng.uniform(-1, 1, tt.size) * np.exp(-tt * 40.0))
-        if self.thump is not None:
-            k = min(n, self.thump.size)
-            out[:k] += self.thump[:k]
-            self.thump = self.thump[k:] if k < self.thump.size else None
         # clocks
         dt = s["dt"]
         self.tick_p += dt
