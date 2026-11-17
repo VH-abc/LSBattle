@@ -33,7 +33,7 @@ from program.box import BOX
 from program.const import IMG_DIR
 
 RATE = 44100
-AHEAD = 0.12            # seconds of audio kept queued
+AHEAD = 0.20            # seconds of audio kept queued (a frame hitch must not starve the device)
 MAXBLOCK = 0.5          # never more than this per update (a frame hitch)
 AUDIO_F32SYS = 0x8120   # little-endian float32 (SDL_AudioFormat)
 
@@ -79,67 +79,95 @@ def _tri(ph):
     return 4.0 * np.abs((ph % 1.0) - 0.5) - 1.0
 
 
-def chiptune(rate=RATE, bpm=150.0, bars=8, seed=7):
-    """A loop in A minor: square-wave arpeggios over a triangle bass, a kick
-    on 1 and 3, a hat on the offbeats.  Returns float32 in [-1, 1]."""
+MAJOR = [0, 2, 4, 5, 7, 9, 11]
+MINOR = [0, 2, 3, 5, 7, 8, 10]
+
+
+def chiptune(rate=RATE, bpm=150.0, bars=8, seed=7, root=9, mode="minor", style="bright"):
+    """A loop in the key `root` (semitones from C) and `mode`, in a style:
+    bright (square arpeggios over a triangle bass, a kick and a hat),
+    driving (faster, syncopated bass, busier arpeggio), dark (slow drone,
+    sparse low arpeggio, no drums).  Returns float32 in [-1, 1]."""
     rng = np.random.RandomState(seed)
     beat = 60.0 / bpm
     bar = 4 * beat
     total = int(bars * bar * rate)
     t = np.arange(total) / float(rate)
     out = np.zeros(total)
-    A = 220.0
-    def note(semi, octave=0):
-        return A * 2.0 ** (semi / 12.0 + octave)
-    # chords (semitones from A): Am, F, C, G, Am, F, C, E
-    chords = [(0, 3, 7), (8, 12, 15), (3, 7, 10), (10, 14, 17), (0, 3, 7), (8, 12, 15), (3, 7, 10), (7, 11, 14)]
-    # arpeggio: 16th notes cycling the chord, up then down, with an octave jump
+    scale = MAJOR if mode == "major" else MINOR
+    base = 261.6256 * 2.0 ** (root / 12.0)          # the key's root above middle C
+    def deg(d, octave=0):
+        o, i = divmod(d, 7)
+        return base * 2.0 ** ((scale[i] + 12*(o + octave)) / 12.0)
+    # chord progressions by scale degree (0-based): I V vi IV / i VI III VII
+    prog = [0, 4, 5, 3, 0, 4, 5, 3] if mode == "major" else [0, 5, 2, 6, 0, 5, 2, 4]
+    chords = [(d, d + 2, d + 4) for d in prog]
+    if style == "dark":
+        lead_amp, bass_amp, duty, lead_oct, drums, step = 0.14, 0.3, 0.5, -1, False, 2
+    elif style == "driving":
+        lead_amp, bass_amp, duty, lead_oct, drums, step = 0.22, 0.3, 0.125, 0, True, 1
+    else:
+        lead_amp, bass_amp, duty, lead_oct, drums, step = 0.22, 0.28, 0.25, 0, True, 1
     sixteenth = beat / 4.0
     pattern = [0, 1, 2, 1, 0, 2, 1, 2]
     for b in range(bars):
         ch = chords[b % len(chords)]
-        for s in range(16):
-            i0 = int((b * bar + s * sixteenth) * rate)
-            i1 = min(int((b * bar + (s + 1) * sixteenth) * rate), total)
+        for s_ in range(0, 16, step):
+            i0 = int((b * bar + s_ * sixteenth) * rate)
+            i1 = min(int((b * bar + (s_ + step) * sixteenth) * rate), total)
             if i1 <= i0:
                 continue
-            k = pattern[s % len(pattern)]
-            oct_ = 1 if (s // 8) % 2 else 0
-            f = note(ch[k], oct_)
+            k = pattern[(s_ // step) % len(pattern)]
+            oct_ = (1 if (s_ // 8) % 2 else 0) + lead_oct
+            f = deg(ch[k], oct_)
             tt = t[i0:i1] - t[i0]
-            env = np.exp(-tt * 9.0) * (1.0 - np.exp(-tt * 400.0))
-            out[i0:i1] += 0.22 * _square(f * tt, 0.25) * env
-    # bass: root in eighths, triangle
+            env = np.exp(-tt * (3.0 if style == "dark" else 9.0)) * (1.0 - np.exp(-tt * 400.0))
+            out[i0:i1] += lead_amp * _square(f * tt, duty) * env
     eighth = beat / 2.0
     for b in range(bars):
-        root = note(chords[b % len(chords)][0], -1)
-        for s in range(8):
-            i0 = int((b * bar + s * eighth) * rate)
-            i1 = min(int((b * bar + (s + 1) * eighth) * rate), total)
+        root_f = deg(chords[b % len(chords)][0], -1)
+        if style == "dark":
+            i0 = int(b * bar * rate); i1 = min(int((b + 1) * bar * rate), total)
             tt = t[i0:i1] - t[i0]
-            f = root * (2.0 if s % 4 == 3 else 1.0)
-            env = np.exp(-tt * 5.0)
-            out[i0:i1] += 0.28 * _tri(f * tt) * env
-    # drums
-    for b in range(bars):
-        for q in range(4):
-            i0 = int((b * bar + q * beat) * rate)
-            i1 = min(i0 + int(0.18 * rate), total)
+            out[i0:i1] += bass_amp * _tri(root_f * 0.5 * tt) * (1.0 - np.exp(-tt * 3.0)) * np.exp(-tt * 0.4)
+            continue
+        for s_ in range(8):
+            i0 = int((b * bar + s_ * eighth) * rate)
+            i1 = min(int((b * bar + (s_ + 1) * eighth) * rate), total)
             tt = t[i0:i1] - t[i0]
-            if q % 2 == 0:      # kick: a sine sweep
-                fk = 40.0 + 120.0 * np.exp(-tt * 30.0)
-                out[i0:i1] += 0.6 * np.sin(2.0 * np.pi * np.cumsum(fk) / rate) * np.exp(-tt * 14.0)
-            else:               # snare-ish: noise burst
-                out[i0:i1] += 0.25 * rng.uniform(-1, 1, i1 - i0) * np.exp(-tt * 25.0)
-            # hat on the offbeat
-            j0 = int((b * bar + (q + 0.5) * beat) * rate)
-            j1 = min(j0 + int(0.05 * rate), total)
-            tj = t[j0:j1] - t[j0]
-            out[j0:j1] += 0.12 * rng.uniform(-1, 1, j1 - j0) * np.exp(-tj * 80.0)
-    # a lowpass to take the edge off the squares: an exponential kernel
+            f = root_f * (2.0 if (s_ % 4 == 3 or (style == "driving" and s_ % 2 == 1)) else 1.0)
+            out[i0:i1] += bass_amp * _tri(f * tt) * np.exp(-tt * 5.0)
+    if drums:
+        for b in range(bars):
+            for q in range(4):
+                i0 = int((b * bar + q * beat) * rate)
+                i1 = min(i0 + int(0.18 * rate), total)
+                tt = t[i0:i1] - t[i0]
+                if q % 2 == 0:
+                    fk = 40.0 + 120.0 * np.exp(-tt * 30.0)
+                    out[i0:i1] += 0.6 * np.sin(2.0 * np.pi * np.cumsum(fk) / rate) * np.exp(-tt * 14.0)
+                else:
+                    out[i0:i1] += 0.25 * rng.uniform(-1, 1, i1 - i0) * np.exp(-tt * 25.0)
+                j0 = int((b * bar + (q + 0.5) * beat) * rate)
+                j1 = min(j0 + int(0.05 * rate), total)
+                tj = t[j0:j1] - t[j0]
+                out[j0:j1] += 0.12 * rng.uniform(-1, 1, j1 - j0) * np.exp(-tj * 80.0)
     y = _lowpass(out, 6000.0, rate)
     peak = np.max(np.abs(y)) or 1.0
     return (0.9 * y / peak).astype(np.float32)
+
+
+# The themes.  "Bathed in the Light" (the Sun's, when its WAV is present) is
+# in A major; the generated ones sit in keys sharing six or seven of its
+# notes: D major, E major, F sharp minor (the relative minor), B minor.
+THEMES = {
+    "sun":       dict(file="music.wav", root=9, mode="major", bpm=150.0, style="bright", seed=7),
+    "helios":    dict(root=2, mode="major", bpm=140.0, style="bright", seed=11),
+    "forge":     dict(root=4, mode="major", bpm=165.0, style="driving", seed=5),
+    "abyss":     dict(root=6, mode="minor", bpm=66.0, style="dark", seed=3),
+    "blackhole": dict(root=11, mode="minor", bpm=80.0, style="dark", seed=13),
+}
+FADE = 2.0        # seconds for a theme to fade in or out
 
 
 def load_wav(path):
@@ -170,20 +198,22 @@ class Audio(object):
     def __init__(self, device=True):
         self.ok = False
         self.dev = 0
-        self.music = None
-        self.pos = 0.0
         self.hum_phase = 0.0
         self.hum_amp = 0.0
         self.tick_p = 0.0          # player seconds since the last proper tick
         self.tick_w = 0.0          # world seconds since the last world tick
-        self.hiss_state = 0.0
-        self.crackle_state = 0.0
         self.rng = np.random.RandomState(1)
-        self.last = {}
-        path = os.path.join(os.path.dirname(IMG_DIR.rstrip("/")), "sound", "music.wav")
-        self.music = load_wav(path) if os.path.exists(path) else None
-        if self.music is None or self.music.size < RATE:
-            self.music = chiptune()
+        sound_dir = os.path.join(os.path.dirname(IMG_DIR.rstrip("/")), "sound")
+        # a theme per body: its loop, read position, gain and target gain
+        self.themes = {}
+        for name, spec in THEMES.items():
+            loop = None
+            if "file" in spec:
+                path = os.path.join(sound_dir, spec["file"])
+                loop = load_wav(path) if os.path.exists(path) else None
+            if loop is None or loop.size < RATE:
+                loop = chiptune(root=spec["root"], mode=spec["mode"], bpm=spec["bpm"], style=spec["style"], seed=spec["seed"])
+            self.themes[name] = dict(loop=loop, pos=0.0, gain=0.0, target=0.0, rate=1.0, amp=1.0, ref=None)
         if not device:
             return
         try:
@@ -209,27 +239,83 @@ class Audio(object):
                 pass
             self.ok = False
 
+    @staticmethod
+    def theme_of(solar, body):
+        """The theme a body plays: its own, else its primary's, up the chain."""
+        depth = 0
+        while body is not None and depth < 8:
+            if body.name.lower() in THEMES:
+                return body.name.lower()
+            body = solar.stars.get(body.orbit[0]) if body.orbit is not None else None
+            depth += 1
+        return None
+
     # ------------------------------------------------------------ the state
     def state_from(self, world, dt_real):
         """What the mixer needs this frame, from the world."""
         pl = world.player; P = pl.P; U = P.U
         s = dict(dt=dt_real, volume=BOX.VOLUME if BOX.SOUND else 0.0)
-        # the music's Doppler factor: source at rest at the home star
-        sun = world.solar.stars.get("sun")
+        # themes: gravity at the ship per theme (a body's goes to its theme,
+        # bodies without one to their primary's); the top one or two play,
+        # the second at a gain set by how close its pull comes to the first's
+        solar = world.solar
         g = U.t
-        if sun is not None and g > 0.0:
-            d = sun.X - P.X
+        bx, by, bz = (U.x / g, U.y / g, U.z / g) if g > 0.0 else (0.0, 0.0, 0.0)
+        pull = {}
+        for star in solar.stars.values():
+            if star.GM <= 0.0 or star.hp <= 0:
+                continue
+            th = self.theme_of(solar, star)
+            if th is None:
+                continue
+            d = (star.X - P.X).length()
+            if d <= 0.0:
+                continue
+            pull[th] = pull.get(th, 0.0) + star.GM / (d*d)
+        ranked = sorted(pull.items(), key=lambda kv: -kv[1])
+        targets = {}
+        if ranked:
+            g1 = ranked[0][1]
+            targets[ranked[0][0]] = 1.0
+            if len(ranked) > 1 and ranked[1][1] > 0.0:
+                ratio = ranked[1][1] / g1
+                targets[ranked[1][0]] = max(0.0, min(0.7, 0.7 * (ratio / 0.02) ** 0.5)) if ratio > 1.0e-4 else 0.0
+        obs = getattr(solar, "obs_shift", 1.0)
+        shifts = getattr(solar, "shifts", {})
+        dop = {}
+        for th in self.themes:
+            self.themes[th]["target"] = targets.get(th, 0.0)
+            body = solar.stars.get(th)
+            if body is None:
+                dop[th] = 1.0
+                continue
+            # the source moves too: f_obs/f_em = (U_obs . k) / (U_src . k),
+            # k the photon direction from the body's retarded position
+            Xc, Us = body.X, body.U
+            if body.orbit is not None and BOX.ORBITS:
+                Xc, Us = solar.state_at(body, P.X.t - (body.X - P.X).length())
+            d = P.X - Xc
             n = d.length()
-            bx, by, bz = U.x / g, U.y / g, U.z / g
-            if n > 0.0:
-                D = g * (1.0 + (bx*d.x + by*d.y + bz*d.z) / n)
-            else:
-                D = 1.0
-            sh = getattr(world.solar, "shifts", {}).get("sun", 1.0)
-            D *= getattr(world.solar, "obs_shift", 1.0) * sh * getattr(sun, "self_shift", 1.0)
-        else:
-            D = 1.0
-        s["doppler"] = max(D, 1e-9)
+            if n <= 0.0:
+                dop[th] = 1.0
+                continue
+            kx, ky, kz = d.x / n, d.y / n, d.z / n
+            num = U.t - (U.x*kx + U.y*ky + U.z*kz)
+            den = Us.t - (Us.x*kx + Us.y*ky + Us.z*kz)
+            D = num / den if den > 0.0 else 1.0
+            D *= obs * shifts.get(th, 1.0) * getattr(body, "self_shift", 1.0)
+            dop[th] = max(D, 1e-9)
+            # loudness like light: power falls as the inverse square of the
+            # distance (amplitude as 1/d) from a reference distance, the
+            # orbit of the body's innermost planet, and rises as the fourth
+            # power of the Doppler factor (amplitude as D^2)
+            t = self.themes[th]
+            if t["ref"] is None:
+                rs = [(b.X0 - body.X0).length() for b in solar.stars.values()
+                      if b.orbit is not None and b.orbit[0] == th]
+                t["ref"] = min(rs) if rs else 499.0
+            t["amp"] = min(4.0, (t["ref"] / n) * D * D)
+        s["doppler"] = dop
         # inside a horizon the outside fades away; at the singularity nothing
         fade = 1.0
         if pl.plunged is not None:
@@ -248,7 +334,7 @@ class Audio(object):
         s["world_rate"] = BOX.time_rate() * g * getattr(world, "rate_limit", 1.0)
         # the blueshift ahead: cosmic background temperature factor gamma (1 + beta)
         beta = (bx*bx + by*by + bz*bz) ** 0.5 if g > 0.0 else 0.0
-        s["blueshift"] = g * (1.0 + beta) * getattr(world.solar, "obs_shift", 1.0)
+        s["blueshift"] = g * (1.0 + beta) * obs
         # an accretion disc's glare at the ship: clicks per second
         from program.utils.lensing import Lensing
         c = Lensing.current
@@ -266,15 +352,23 @@ class Audio(object):
         vol = s["volume"]
         if vol <= 0.0 or n <= 0:
             return out.astype(np.float32)
-        # music, resampled at the Doppler rate (unclamped)
-        m = self.music; L = m.size
-        r = s["doppler"]
-        idx = self.pos + r * np.arange(n)
-        self.pos = (self.pos + r * n) % L
-        i0 = np.floor(idx).astype(np.int64) % L
-        fr = idx - np.floor(idx)
-        i1 = (i0 + 1) % L
-        out += (m[i0] * (1.0 - fr) + m[i1] * fr) * s["fade"]
+        # the themes, each resampled at its own Doppler rate (unclamped),
+        # gains easing to their targets over FADE seconds
+        dt = s["dt"]
+        k = min(1.0, dt / FADE)
+        for name, th in self.themes.items():
+            g0 = th["gain"]; g1 = g0 + (th["target"] - g0) * k
+            th["gain"] = g1
+            if g0 < 1e-4 and g1 < 1e-4:
+                continue
+            m = th["loop"]; L = m.size
+            r = s["doppler"].get(name, 1.0)
+            idx = th["pos"] + r * np.arange(n)
+            th["pos"] = (th["pos"] + r * n) % L
+            i0 = np.floor(idx).astype(np.int64) % L
+            fr = idx - np.floor(idx)
+            i1 = (i0 + 1) % L
+            out += (m[i0] * (1.0 - fr) + m[i1] * fr) * (np.linspace(g0, g1, n) * s["fade"] * th["amp"])
         if not BOX.EFFECTS:
             out *= vol
             return self.finish(out)
@@ -321,11 +415,20 @@ class Audio(object):
         out *= vol
         return self.finish(out)
 
+    LP_TAPS = 64
+
     def finish(self, out):
         """The output stage: a gentle lowpass (6 dB/octave above 3.5 kHz)
-        so a blueshifted track is bright, not screechy, then the clip."""
-        out = _lowpass(out, 3500.0, taps=64)
-        return np.clip(out, -1.0, 1.0).astype(np.float32)
+        so a blueshifted track is bright, not screechy, then the clip.  The
+        filter sees the previous block's tail first, so there is no step at
+        the block boundary (a per-block convolution crackled at 60 Hz)."""
+        hist = getattr(self, "lp_hist", None)
+        if hist is None:
+            hist = np.zeros(self.LP_TAPS)
+        x = np.concatenate([hist, out])
+        y = _lowpass(x, 3500.0, taps=self.LP_TAPS)[self.LP_TAPS:]
+        self.lp_hist = x[-self.LP_TAPS:]
+        return np.tanh(y).astype(np.float32)       # a soft limiter: loud approaches saturate, never clip
 
     def update(self, world, dt_real):
         """Called once a frame: top the queue up to AHEAD seconds."""
