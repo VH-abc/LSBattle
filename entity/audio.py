@@ -104,6 +104,8 @@ def chiptune(rate=RATE, bpm=150.0, bars=8, seed=7, root=9, mode="minor", style="
     chords = [(d, d + 2, d + 4) for d in prog]
     if style == "dark":
         lead_amp, bass_amp, duty, lead_oct, drums, step = 0.14, 0.3, 0.5, -1, False, 2
+    elif style == "calm":
+        lead_amp, bass_amp, duty, lead_oct, drums, step = 0.2, 0.26, None, 0, False, 2
     elif style == "driving":
         lead_amp, bass_amp, duty, lead_oct, drums, step = 0.22, 0.3, 0.125, 0, True, 1
     else:
@@ -122,7 +124,7 @@ def chiptune(rate=RATE, bpm=150.0, bars=8, seed=7, root=9, mode="minor", style="
             f = deg(ch[k], oct_)
             tt = t[i0:i1] - t[i0]
             env = np.exp(-tt * (3.0 if style == "dark" else 9.0)) * (1.0 - np.exp(-tt * 400.0))
-            out[i0:i1] += lead_amp * _square(f * tt, duty) * env
+            out[i0:i1] += lead_amp * (_tri(f * tt) if duty is None else _square(f * tt, duty)) * env
     eighth = beat / 2.0
     for b in range(bars):
         root_f = deg(chords[b % len(chords)][0], -1)
@@ -161,11 +163,25 @@ def chiptune(rate=RATE, bpm=150.0, bars=8, seed=7, root=9, mode="minor", style="
 # in A major; the generated ones sit in keys sharing six or seven of its
 # notes: D major, E major, F sharp minor (the relative minor), B minor.
 THEMES = {
-    "sun":       dict(file="music.wav", root=9, mode="major", bpm=150.0, style="bright", seed=7),
-    "helios":    dict(root=2, mode="major", bpm=140.0, style="bright", seed=11),
-    "forge":     dict(root=4, mode="major", bpm=165.0, style="driving", seed=5),
-    "abyss":     dict(root=6, mode="minor", bpm=66.0, style="dark", seed=3),
-    "blackhole": dict(root=11, mode="minor", bpm=80.0, style="dark", seed=13),
+    # roots: C 0, C# 1, D 2, E 4, F# 6, A 9, B 11
+    "sun":         dict(file="music.wav", root=9, mode="major", bpm=150.0, style="bright", seed=7),
+    "earth":       dict(root=9, mode="major", bpm=118.0, style="calm", seed=21),
+    "moon":        dict(root=6, mode="minor", bpm=60.0, style="calm", seed=22),
+    "venus":       dict(root=2, mode="major", bpm=108.0, style="bright", seed=23),
+    "mars":        dict(root=4, mode="major", bpm=150.0, style="driving", seed=24),
+    "jupiter":     dict(root=11, mode="minor", bpm=128.0, style="driving", seed=25),
+    "saturn":      dict(root=2, mode="major", bpm=92.0, style="calm", seed=26),
+    "neutronstar": dict(root=1, mode="minor", bpm=180.0, style="driving", seed=27),
+    "sirius":      dict(root=9, mode="major", bpm=160.0, style="bright", seed=28),
+    "proxima":     dict(root=11, mode="minor", bpm=72.0, style="dark", seed=29),
+    "betelgeuse":  dict(root=6, mode="minor", bpm=52.0, style="dark", seed=30),
+    "helios":      dict(root=2, mode="major", bpm=140.0, style="bright", seed=11),
+    "forge":       dict(root=4, mode="major", bpm=165.0, style="driving", seed=5),
+    "cinder":      dict(root=4, mode="major", bpm=140.0, style="bright", seed=31),
+    "abyss":       dict(root=6, mode="minor", bpm=66.0, style="dark", seed=3),
+    "ember":       dict(root=1, mode="minor", bpm=170.0, style="driving", seed=32),
+    "ash":         dict(root=6, mode="minor", bpm=90.0, style="calm", seed=33),
+    "blackhole":   dict(root=11, mode="minor", bpm=80.0, style="dark", seed=13),
 }
 FADE = 2.0        # seconds for a theme to fade in or out
 
@@ -313,8 +329,8 @@ class Audio(object):
             if t["ref"] is None:
                 rs = [(b.X0 - body.X0).length() for b in solar.stars.values()
                       if b.orbit is not None and b.orbit[0] == th]
-                t["ref"] = min(rs) if rs else 499.0
-            t["amp"] = min(4.0, (t["ref"] / n) * D * D)
+                t["ref"] = min(rs) if rs else 20.0 * max(body.radius, 1e-9)
+            t["amp"] = min(2.0, (t["ref"] / n) * D * D)
         s["doppler"] = dop
         # inside a horizon the outside fades away; at the singularity nothing
         fade = 1.0

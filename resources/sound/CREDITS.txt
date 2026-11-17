@@ -9,10 +9,12 @@ else a chiptune loop it generates itself.  The track above is the one
 Velocity Raptor (TestTubeGames) uses for its levels, as its author said:
 https://news.ycombinator.com/item?id=9247460
 
-Themes per body: the Sun's is the track above (A major); Helios (D major),
-Forge (E major), Abyss (F sharp minor) and the Gaia black hole (B minor)
-have chiptune loops the game generates itself, in keys sharing six or seven
-notes with it.  Each plays from its body, Doppler-shifted by the body's
+Themes per body: the Sun's is the track above (A major); Earth, the Moon,
+Venus, Mars, Jupiter, Saturn, the neutron star, Sirius, Proxima,
+Betelgeuse, Helios, Forge, Cinder, Abyss, Ember, Ash and the Gaia black
+hole have chiptune loops the game generates itself, in A, D or E major or
+F sharp, B or C sharp minor: keys sharing six or seven notes with it.
+Other bodies play their primary's.  Each plays from its body, Doppler-shifted by the body's
 and the ship's motion and the gravitational shift, loud as light would be
 (inverse-square with distance, fourth power of the Doppler factor); the
 one or two bodies pulling hardest at the ship are heard, fading over two
