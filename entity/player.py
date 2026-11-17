@@ -166,6 +166,7 @@ class Player(object):
         self.landed = None            # body the ship is resting on
         self.inside = None            # black hole whose horizon the ship is within
         self.plunged = None           # black hole at whose singularity the ship ended
+        self.boost_fired = False      # for the mixer: the booster fired this frame
         self.collision_radius2 = (script.player.collision_radius*world.scale)**2
         self.delay = self.collision_radius
         self.repulsion = (script.player.repulsion + script.enemy.repulsion) * 0.5
@@ -722,7 +723,8 @@ class Player(object):
             # applied as an exact boost in this substep (Wigner rotation too)
             keys.k_impulse = 0
             fwd = self.quaternion.get_RotMat().forward       # the kick is along -forward (the nose)
-            eta = BOX.IMPULSE_RAPIDITY
+            eta = BOX.impulse()
+            self.boost_fired = True
             if self.landed is not None and self.landed.GM > 0.0 and not self.landed.is_hole:
                 # launch: from a surface the tap is at least 1.15x the orbital
                 # speed there, along the nose (an ellipse from the surface out

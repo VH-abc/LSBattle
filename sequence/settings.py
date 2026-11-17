@@ -14,7 +14,7 @@ ACCELS = [1e-8, 3e-8, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3
 
 
 class Settings(object):
-    PRESET, ACCEL, COLOR, HDR, GRID, BRAKE, GLARE, VISUAL, GLARE_SPREAD, AUTOEXP, CMB, CROSSHAIR, MARKERS, GRAVITY, ORBITS, ADAPTIVE, BOOSTER, LENSING, INERTIA, GOTO = range(20)
+    PRESET, ACCEL, COLOR, HDR, GRID, BRAKE, GLARE, VISUAL, GLARE_SPREAD, AUTOEXP, CMB, CROSSHAIR, MARKERS, GRAVITY, ORBITS, ADAPTIVE, BOOSTER, LENSING, INERTIA, SOUND, GOTO = range(21)
 
     def __init__(self, in_game=False):
         self.in_game = in_game
@@ -55,6 +55,7 @@ class Settings(object):
                                      if BOX.IMPULSE else "hold = continuous turbo"),
                 "Gravitational lensing near compact bodies: %s" % ("On" if BOX.LENSING else "Off"),
                 "Turning inertia (arrow keys): %s" % ("On: accelerate, coast, damp" if BOX.INERTIA else "Off: fixed rate, instant stop"),
+                "Sound: %s  (in game: m; volume with <- ->)" % (("On, volume %d%%" % round(100*BOX.VOLUME)) if BOX.SOUND else "Off"),
                 "Travel to: %s  (<- -> choose; Enter: go there, apply its preset, start in orbit)%s" % (
                     BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)][0], "" if self.world is not None else "  [in game only]")]
 
@@ -120,6 +121,8 @@ class Settings(object):
             BOX.set_flag("LENSING", not BOX.LENSING)
         elif choice == self.INERTIA:
             BOX.set_flag("INERTIA", not BOX.INERTIA)
+        elif choice == self.SOUND:
+            BOX.set_flag("SOUND", not BOX.SOUND)
         elif choice == self.GOTO and self.world is not None:
             label, body, prefix = BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)]
             i = BOX.preset_index(prefix)

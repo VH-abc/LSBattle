@@ -1,6 +1,7 @@
 # coding: utf8
 # entity/world.py
 import math
+import os
 from math import atan2, pi, cos, sin
 from random import random, randint
 
@@ -84,7 +85,22 @@ class World(object):
 
     MAX_SUBSTEPS = 200
 
+    def init_audio(self):
+        """The mixer, unless hidden (harnesses) or off."""
+        self.audio = None
+        if os.environ.get("LSB_HIDDEN") or not BOX.SOUND:
+            return
+        try:
+            from entity.audio import Audio
+            self.audio = Audio()
+        except Exception:
+            self.audio = None
+
     def action(self, keys, ds):
+        self._keys = keys
+        if getattr(self, "audio", None) is None and BOX.SOUND and not os.environ.get("LSB_HIDDEN") and not getattr(self, "_audio_tried", False):
+            self._audio_tried = True
+            self.init_audio()
         # Free-space motion is integrated exactly for any step, so the step
         # is set by gravity alone.  The step is chosen afresh for every
         # substep from the ship's current position: a frame that starts far
@@ -133,6 +149,8 @@ class World(object):
                 self._step(keys, dt)
         for wl in self.worldline_ref.values():
             wl.cut()
+        if getattr(self, "audio", None) is not None:
+            self.audio.update(self, ds / BOX.time_rate())
 
     def _step(self, keys, ds):
         self.solar.update(self.player.P.X.t)
@@ -242,6 +260,7 @@ class World(object):
         if not BOX.ADAPTIVE:
             BOX.rate_factor = 1.0
             BOX.thrust_factor = 1.0
+            BOX.boost_factor = 1.0
             return
         body = self.solar.dominant(self.player.P.X)
         if body is None or body.GM <= 0.0:
@@ -253,6 +272,9 @@ class World(object):
         g = body.GM / (r*r)
         tf = max(1.0e-9, min(1.0e9, (g / BOX.ADAPTIVE_G0) ** BOX.ADAPTIVE_S))
         BOX.thrust_factor += (tf - BOX.thrust_factor) * k
+        # the booster with the local orbital speed
+        bf = max(1.0e-6, min(1.0e6, (body.GM / r) ** 0.5 / BOX.ADAPTIVE_V0))
+        BOX.boost_factor += (bf - BOX.boost_factor) * k
         # time rate with the orbital period, capped by the (adaptive) thrust
         target = max(1.0e-6, min(1.0e12, (T / BOX.ADAPTIVE_T0) ** BOX.ADAPTIVE_P))
         accel = BOX.thrust(self.player.acceleration) if self.player.acceleration > 0.0 else 1.0e-30

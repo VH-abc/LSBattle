@@ -124,6 +124,8 @@ class Play(object):
                         BOX.set_flag("GRID", not BOX.GRID)
                     elif key == sdl2.SDLK_v:
                         BOX.toggle_visual()
+                    elif key == sdl2.SDLK_m:
+                        BOX.set_flag("SOUND", not BOX.SOUND)
                     elif key == sdl2.SDLK_l:
                         BOX.set_flag("GLARE", not BOX.GLARE)
                     elif key == sdl2.SDLK_b:
@@ -273,7 +275,7 @@ class Play(object):
                 else:
                     text += "Accel: %.3g c/s  (, .)\n"%(self.world.player.acceleration)
                 if BOX.IMPULSE:
-                    text += "Booster impulse: %.3g rapidity  (; ')%s\n"%(BOX.IMPULSE_RAPIDITY, "; launches from a surface" if self.world.player.landed is not None else "")
+                    text += "Booster impulse: %.3g rapidity%s  (; ')%s\n"%(BOX.impulse(), " adaptive" if BOX.ADAPTIVE else "", "; launches from a surface" if self.world.player.landed is not None else "")
                 fo = getattr(self.world.solar, "obs_shift", 1.0)
                 if abs(fo - 1.0) > 1e-4:
                     text += "Gravitational blueshift: x%.4g\n" % fo

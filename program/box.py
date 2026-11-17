@@ -32,8 +32,11 @@ class _Box(object):
         self.EXPOSURE = 1.0        # multiplier used by the accurate colour mode
         self.AUTOEXP = False       # lower the exposure automatically while the view is very bright
         self.ADAPTIVE = False      # time rate scales with the local orbital period (TIME_RATE is the rate in low Earth orbit)
+        self.SOUND = True          # the mixer (music Doppler-shifted from the home star, thrust, clocks, sky)
+        self.VOLUME = 0.5
         self.rate_factor = 1.0     # the adaptive factor now in force (World.action)
         self.thrust_factor = 1.0   # and the thrust's (ADAPTIVE: weaker where gravity is weaker)
+        self.boost_factor = 1.0    # and the booster's (ADAPTIVE: a fixed fraction of the local orbital speed)
         self.GLARE_CAP = 0.6       # soft ceiling on the glare veil, fraction of white (0: none)
         self.GLARE_SPREAD = 6.0    # degrees the glare may spread (0: unlimited, the eye's 1/theta^2 wing)
         self.GLARE_GAIN = 4.0      # halo strength multiplier (1: the eye model)
@@ -97,11 +100,13 @@ class _Box(object):
                     self.GLARE_GAIN = float(v)
                 elif w == "GLARE_SLOPE":
                     self.GLARE_SLOPE = float(v)
+                elif w == "VOLUME":
+                    self.VOLUME = max(0.0, min(1.0, float(v)))
                 elif w == "VISUAL":
                     self.VISUAL = v.strip().upper()
                     if self.VISUAL == "AESTHETIC":      # the old name
                         self.VISUAL = "COMFORTABLE"
-                elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP", "ADAPTIVE"):
+                elif w in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP", "ADAPTIVE", "SOUND"):
                     setattr(self, w, (v == "True"))
             if (X, Y) not in disp_sizes:
                 X, Y = disp_sizes[0]
@@ -427,13 +432,19 @@ class _Box(object):
     # still grows with the rate (at 1 AU: 1.3x low orbit's, not 750x).
     ADAPTIVE_G0 = 8.17e-9
     ADAPTIVE_S = 0.85
+    ADAPTIVE_V0 = 1.86e-5      # the orbital speed two Earth radii up (5.6 km/s), c = 1: the booster scales with v_orbit/V0
 
     def thrust(self, base):
         """The thrust in force for a scripted/set thrust `base`."""
         return base * (self.thrust_factor if self.ADAPTIVE else 1.0)
 
     def time_rate(self):
-        return self.TIME_RATE * (self.rate_factor if self.ADAPTIVE else 1.0)
+        # never below real time
+        return max(1.0, self.TIME_RATE * self.rate_factor) if self.ADAPTIVE else self.TIME_RATE
+
+    def impulse(self):
+        """The booster's rapidity kick in force."""
+        return self.IMPULSE_RAPIDITY * (self.boost_factor if self.ADAPTIVE else 1.0)
 
     def exposure(self):
         """The exposure in force: the setting, reduced by the automatic
@@ -501,7 +512,7 @@ class _Box(object):
                     k = k.upper()
                     if k in ("ACCEL", "TIME_RATE", "EXPOSURE", "IMPULSE_RAPIDITY"):
                         vals[k] = float(v)
-                    elif k in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP", "ADAPTIVE"):
+                    elif k in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP", "ADAPTIVE", "SOUND"):
                         vals[k] = v.lower() in ("1", "true", "on", "yes")
                     elif k == "COLOR_MODE":
                         vals[k] = v.upper()
@@ -593,8 +604,9 @@ class _Box(object):
                 f.write("GLARE_CAP=%r\n"%self.GLARE_CAP)
                 f.write("GLARE_GAIN=%r\n"%self.GLARE_GAIN)
                 f.write("GLARE_SLOPE=%r\n"%self.GLARE_SLOPE)
+                f.write("VOLUME=%r\n"%self.VOLUME)
                 f.write("VISUAL=%s\n"%self.VISUAL)
-                for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP", "ADAPTIVE"):
+                for name in ("GRID", "BRAKE", "GLARE", "CMB", "CROSSHAIR", "MARKERS", "GRAVITY", "ORBITS", "IMPULSE", "LENSING", "INERTIA", "AUTOEXP", "ADAPTIVE", "SOUND"):
                     f.write("%s=%s\n"%(name, getattr(self, name)))
                 f.close()
             except:
