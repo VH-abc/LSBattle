@@ -431,10 +431,10 @@ class Audio(object):
         out *= vol
         return self.finish(out)
 
-    LP_TAPS = 64
+    LP_TAPS = 128
 
     def finish(self, out):
-        """The output stage: a gentle lowpass (6 dB/octave above 3.5 kHz)
+        """The output stage: a lowpass (12 dB/octave above 2 kHz)
         so a blueshifted track is bright, not screechy, then the clip.  The
         filter sees the previous block's tail first, so there is no step at
         the block boundary (a per-block convolution crackled at 60 Hz)."""
@@ -442,7 +442,8 @@ class Audio(object):
         if hist is None:
             hist = np.zeros(self.LP_TAPS)
         x = np.concatenate([hist, out])
-        y = _lowpass(x, 3500.0, taps=self.LP_TAPS)[self.LP_TAPS:]
+        # two poles at 2 kHz: 12 dB per octave above it
+        y = _lowpass(_lowpass(x, 2000.0, taps=self.LP_TAPS), 2000.0, taps=self.LP_TAPS)[self.LP_TAPS:]
         self.lp_hist = x[-self.LP_TAPS:]
         return np.tanh(y).astype(np.float32)       # a soft limiter: loud approaches saturate, never clip
 
