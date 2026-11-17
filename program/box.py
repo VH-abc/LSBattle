@@ -518,6 +518,10 @@ class _Box(object):
         if not 0 <= i < len(plist):
             return None
         name, vals = plist[i]
+        # a preset is a whole mode: the adaptive rate and thrust are off
+        # unless it asks for them (they are saved, so they would stick)
+        if "ADAPTIVE" not in vals:
+            self.ADAPTIVE = False
         for k, v in vals.items():
             if k == "START":
                 continue

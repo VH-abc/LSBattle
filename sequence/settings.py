@@ -14,7 +14,7 @@ ACCELS = [1e-8, 3e-8, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3
 
 
 class Settings(object):
-    PRESET, ACCEL, COLOR, HDR, GRID, BRAKE, GLARE, VISUAL, GLARE_SPREAD, AUTOEXP, CMB, CROSSHAIR, MARKERS, GRAVITY, ORBITS, BOOSTER, LENSING, INERTIA, GOTO = range(19)
+    PRESET, ACCEL, COLOR, HDR, GRID, BRAKE, GLARE, VISUAL, GLARE_SPREAD, AUTOEXP, CMB, CROSSHAIR, MARKERS, GRAVITY, ORBITS, ADAPTIVE, BOOSTER, LENSING, INERTIA, GOTO = range(20)
 
     def __init__(self, in_game=False):
         self.in_game = in_game
@@ -50,6 +50,7 @@ class Settings(object):
                 "Navigation markers: %s" % ("On" if BOX.MARKERS else "Off"),
                 "Gravity: %s" % ("On" if BOX.GRAVITY else "Off"),
                 "Orbiting bodies: %s" % ("On" if BOX.ORBITS else "Off"),
+                "Adaptive time rate and thrust (with the local orbit): %s" % ("On" if BOX.ADAPTIVE else "Off"),
                 "Booster key: %s" % (("tap = rapidity impulse %.3g  (<- ->, in game ; ')" % BOX.IMPULSE_RAPIDITY)
                                      if BOX.IMPULSE else "hold = continuous turbo"),
                 "Gravitational lensing near compact bodies: %s" % ("On" if BOX.LENSING else "Off"),
@@ -111,6 +112,8 @@ class Settings(object):
             BOX.set_flag("GRAVITY", not BOX.GRAVITY)
         elif choice == self.ORBITS:
             BOX.set_flag("ORBITS", not BOX.ORBITS)
+        elif choice == self.ADAPTIVE:
+            BOX.set_flag("ADAPTIVE", not BOX.ADAPTIVE)
         elif choice == self.BOOSTER:
             BOX.set_flag("IMPULSE", not BOX.IMPULSE)
         elif choice == self.LENSING:
