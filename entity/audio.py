@@ -275,6 +275,9 @@ class Audio(object):
         fr = idx - np.floor(idx)
         i1 = (i0 + 1) % L
         out += (m[i0] * (1.0 - fr) + m[i1] * fr) * (0.6 * s["fade"])
+        if not BOX.EFFECTS:
+            out *= vol
+            return np.clip(out, -1.0, 1.0).astype(np.float32)
         # thrust hum: pitch with the thrust in force
         a = s["thrust"] if s["thrust_on"] else 0.0
         target = 0.25 if s["thrust_on"] else 0.0

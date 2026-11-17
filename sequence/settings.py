@@ -14,7 +14,7 @@ ACCELS = [1e-8, 3e-8, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3
 
 
 class Settings(object):
-    PRESET, ACCEL, COLOR, HDR, GRID, BRAKE, GLARE, VISUAL, GLARE_SPREAD, AUTOEXP, CMB, CROSSHAIR, MARKERS, GRAVITY, ORBITS, ADAPTIVE, BOOSTER, LENSING, INERTIA, SOUND, GOTO = range(21)
+    PRESET, ACCEL, COLOR, HDR, GRID, BRAKE, GLARE, VISUAL, GLARE_SPREAD, AUTOEXP, CMB, CROSSHAIR, MARKERS, GRAVITY, ORBITS, ADAPTIVE, BOOSTER, LENSING, INERTIA, SOUND, EFFECTS, GOTO = range(22)
 
     def __init__(self, in_game=False):
         self.in_game = in_game
@@ -57,6 +57,7 @@ class Settings(object):
                 "Turning inertia (arrow keys): %s" % ("On: accelerate, coast, damp" if BOX.INERTIA else "Off: fixed rate, instant stop"),
                 "Sound: %s%s" % (("On, volume %d%%" % round(100*BOX.VOLUME)) if BOX.SOUND else "Off",
                                 "  [music: Bathed in the Light, Kevin MacLeod (incompetech.com), CC BY]" if BOX.music_credit else "  (in game: m)"),
+                "Sound effects (thrust hum, clocks, sky hiss, disc crackle): %s" % ("On" if BOX.EFFECTS else "Off"),
                 "Travel to: %s  (<- -> choose; Enter: go there, apply its preset, start in orbit)%s" % (
                     BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)][0], "" if self.world is not None else "  [in game only]")]
 
@@ -124,6 +125,8 @@ class Settings(object):
             BOX.set_flag("INERTIA", not BOX.INERTIA)
         elif choice == self.SOUND:
             BOX.set_flag("SOUND", not BOX.SOUND)
+        elif choice == self.EFFECTS:
+            BOX.set_flag("EFFECTS", not BOX.EFFECTS)
         elif choice == self.GOTO and self.world is not None:
             label, body, prefix = BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)]
             i = BOX.preset_index(prefix)
