@@ -277,7 +277,7 @@ class Audio(object):
         out += (m[i0] * (1.0 - fr) + m[i1] * fr) * s["fade"]
         if not BOX.EFFECTS:
             out *= vol
-            return np.clip(out, -1.0, 1.0).astype(np.float32)
+            return self.finish(out)
         # thrust hum: pitch with the thrust in force
         a = s["thrust"] if s["thrust_on"] else 0.0
         target = 0.25 if s["thrust_on"] else 0.0
@@ -319,6 +319,12 @@ class Audio(object):
                 kern = np.exp(-np.arange(60) / 12.0)
                 out += 0.5 * np.convolve(imp, kern)[:n]
         out *= vol
+        return self.finish(out)
+
+    def finish(self, out):
+        """The output stage: a gentle lowpass (6 dB/octave above 3.5 kHz)
+        so a blueshifted track is bright, not screechy, then the clip."""
+        out = _lowpass(out, 3500.0, taps=64)
         return np.clip(out, -1.0, 1.0).astype(np.float32)
 
     def update(self, world, dt_real):

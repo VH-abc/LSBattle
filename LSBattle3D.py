@@ -23,12 +23,14 @@ except:
     sys.exit(1)
 
 def run():
-    # hang watchdog: every 20 s the Python stack of each thread goes to
-    # hang.log, so a frozen game leaves a record of where it was stuck
+    # on a fatal signal (segfault, abort) the Python stack of each thread
+    # goes to hang.log.  (A periodic dump_traceback_later was here before;
+    # with the audio device's thread alive it corrupted the heap at the
+    # moment of its dump, crashing the game 20 s after launch.)
     try:
         import faulthandler, os
         _log = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "hang.log"), "w")
-        faulthandler.dump_traceback_later(20, repeat=True, file=_log)
+        faulthandler.enable(file=_log, all_threads=True)
     except Exception:
         pass
     from sequence.game import Game
