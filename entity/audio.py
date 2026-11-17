@@ -274,7 +274,7 @@ class Audio(object):
         i0 = np.floor(idx).astype(np.int64) % L
         fr = idx - np.floor(idx)
         i1 = (i0 + 1) % L
-        out += (m[i0] * (1.0 - fr) + m[i1] * fr) * (0.6 * s["fade"])
+        out += (m[i0] * (1.0 - fr) + m[i1] * fr) * s["fade"]
         if not BOX.EFFECTS:
             out *= vol
             return np.clip(out, -1.0, 1.0).astype(np.float32)
