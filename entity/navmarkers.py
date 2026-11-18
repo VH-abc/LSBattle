@@ -118,9 +118,15 @@ class NavMarkers(object):
             m = hypot(hypot(vv[0], vv[1]), vv[2])
             if m > 0.0 and Lensing.current is not None:
                 # bodies beyond a lens are drawn at their bent image
-                w = Lensing.weight(d_lab)
-                if w > 0.0:
-                    vv = list(Lensing.apparent((vv[0]/m, vv[1]/m, vv[2]/m), w))
+                done = False
+                if Lensing.near_table() and Lensing.wscale() > 0.0:
+                    img = Lensing.image_near((dX.x, dX.y, dX.z))
+                    if img is not None:
+                        vv = list(Lensing.ship_dir(img)); done = True
+                if not done:
+                    w = Lensing.weight(d_lab)
+                    if w > 0.0:
+                        vv = list(Lensing.apparent((vv[0]/m, vv[1]/m, vv[2]/m), w))
             v = view.get_rotate(vv)
             n = hypot(hypot(v[0], v[1]), v[2])
             if n == 0.0:

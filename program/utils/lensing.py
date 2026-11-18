@@ -45,6 +45,41 @@ uniform sampler1D lens_table;    // view angle from the hole (0..pi) -> (source 
 uniform sampler1D lens_tinv;     // source angle (0..pi) -> view angle of its primary image (the table inverted)
 uniform sampler1D lens_tinv2;    // source angle (0..pi) -> view angle of its secondary image (wrapped round the far side)
 uniform float lens_branch;       // 0: primary image; 1: secondary (a second pass over the body)
+uniform float lens_D;            // distance of the lens from the ship (ship-frame units of the vertices)
+uniform sampler2D lens_ray;      // (theta, log rho) -> (sweep on the inbound leg, sweep on the outbound leg), -1: none
+uniform float lens_rs;           // the hole's Schwarzschild radius, same units
+uniform float lens_rhomax;       // the table's largest rho over R_s (log grid from R_s)
+uniform float lens_finite;       // 1: the 2-D table is bound
+// the sweep of the ray at view angle th when it reaches radius rho (0 < v < 1 along the log-rho grid)
+vec2 lens_sweep(float th, float v) {
+    return texture2D(lens_ray, vec2(th * 0.31830988618379067, v)).rg;
+}
+// view angle th of the image of a source at radius rho (log-grid coordinate v)
+// and sweep angle target, on leg 0 (inbound, sweep rising with th) or leg 1
+// (outbound, sweep falling with th); returns -1 when there is none
+float lens_solve(int leg, float v, float target) {
+    // coarse scan for the bracket
+    float lo = -1.0, hi = -1.0, flo = 0.0, fhi = 0.0;
+    float prev_th = -1.0, prev_f = -1.0;
+    for (int i = 0; i < 128; i++) {
+        float th = (float(i) + 0.5) * 3.14159265358979 / 128.0;
+        vec2 sw = lens_sweep(th, v);
+        float f = (leg == 0) ? sw.r : sw.g;
+        if (f >= 0.0 && prev_f >= 0.0) {
+            if ((prev_f - target) * (f - target) <= 0.0) { lo = prev_th; hi = th; flo = prev_f; fhi = f; break; }
+        }
+        prev_th = th; prev_f = f;
+    }
+    if (lo < 0.0) return -1.0;
+    for (int i = 0; i < 8; i++) {
+        float mid = 0.5*(lo + hi);
+        vec2 sw = lens_sweep(mid, v);
+        float f = (leg == 0) ? sw.r : sw.g;
+        if (f < 0.0) { hi = mid; continue; }
+        if ((flo - target) * (f - target) <= 0.0) { hi = mid; fhi = f; } else { lo = mid; flo = f; }
+    }
+    return 0.5*(lo + hi);
+}
 float lens_gs = 1.0;             // set by lens_source: observed/emitted frequency of the sky in that direction (exact table only)
 // direction toward a source seen by the ship -> the same ray in the background frame
 vec3 lens_to_lab(vec3 v) {
@@ -92,6 +127,34 @@ vec3 lens_source(vec3 d) {
     e /= el;
     return lens_h*cos(beta) + e*sin(beta);
 }
+// the image of a source at position p (background frame, ship at the origin)
+// near the hole: its radius rho from the hole and the angle psi at the hole
+// between ship and source select the ray; primary (branch 0) on the inbound
+// leg if there is one, else the outbound; secondary (branch 1) round the far
+// side.  Returns the image direction, or the zero vector when the 2-D
+// table has nothing (the caller then falls back).
+vec3 lens_apparent_near(vec3 p, float branch) {
+    vec3 q = p - lens_D * lens_h;               // source relative to the hole
+    float rho = length(q);
+    if (rho <= lens_rs || rho >= lens_rs * lens_rhomax) return vec3(0.0);
+    vec3 qh = q / rho;
+    float cpsi = clamp(dot(-lens_h, qh), -1.0, 1.0);
+    float psi = acos(cpsi);
+    vec3 e = qh + cpsi * lens_h;                // the source's side, perpendicular to h
+    float el = length(e);
+    if (el < 1e-6) e = vec3(0.0); else e /= el;
+    float v = log(rho / lens_rs) / log(lens_rhomax);
+    float th = -1.0;
+    if (branch < 0.5) {
+        th = lens_solve(0, v, psi);
+        if (th < 0.0) th = lens_solve(1, v, psi);
+        if (th < 0.0) return vec3(0.0);
+        return lens_h*cos(th) + e*sin(th);
+    }
+    th = lens_solve(1, v, 6.28318530717959 - psi);
+    if (th < 0.0) return vec3(0.0);
+    return lens_h*cos(th) - e*sin(th);
+}
 // where a source at background-frame direction d appears (primary image),
 // for a source that sees the fraction w of the deflection
 vec3 lens_apparent(vec3 d, float w) {
@@ -106,7 +169,13 @@ vec3 lens_apparent(vec3 d, float w) {
         // source at infinity; a nearer source sees the fraction w of the shift
         if (lens_branch > 0.5) {
             // the secondary image: the ray went round the far side, so the
-            // image is on the opposite side of the hole, inside the Einstein ring
+            // image is on the opposite side of the hole, inside the Einstein
+            // ring.  Only for sources well beyond the hole; nearer ones go
+            // to their primary place (the pass then just overdraws it)
+            if (w < 0.3) {
+                float thw = beta + (texture1D(lens_tinv, beta * 0.31830988618379067).r - beta) * w;
+                return lens_h*cos(thw) + e*sin(thw);
+            }
             float th2 = texture1D(lens_tinv2, beta * 0.31830988618379067).r;
             return lens_h*cos(th2) - e*sin(th2);
         }
@@ -353,6 +422,8 @@ class Lensing(object):
     _table_tex = None
     _inv_tex = None
     _inv2_tex = None
+    _ray_tex = None
+    _ray_rows = None       # (phi_in, phi_out, rho) of the current hole
     _table_key = None
     _inv_rows = None       # the inverse table of the current hole (markers use it)
 
@@ -419,22 +490,30 @@ class Lensing(object):
         return max(e, 1.0)
 
     @classmethod
-    def weight(cls, Ds):
-        """Fraction of the deflection seen by a body at distance Ds: the
-        thin-lens (D_s - D)/D_s, 0 for anything at or inside the lens's
-        distance (the lens itself, its planets and disc)."""
+    def wscale(cls):
+        """Scale of the bending of bodies: the per-vertex fraction of the
+        deflection, (d - D)/d for a vertex at distance d beyond the lens at
+        D (0 at or inside it: the lens itself, the near side of its disc),
+        is multiplied by this.  1 for a black hole (the exact table), 0 in
+        the rain frame; for a star's thin lens (only good while the lens is
+        weak as seen from the ship) it fades out between R_s/D = 0.05 and
+        0.1."""
         c = cls.current
-        if c is None or c["rain"] or Ds <= c["D"] + 1.5*c["R"]:
+        if c is None or c["rain"]:
             return 0.0
-        w = (Ds - c["D"]) / Ds
         if c["is_hole"]:
-            return w            # bent with the exact table, like the sky
-        # A star's thin lens (small deflection) is only good while the lens
-        # is weak as seen from the ship, R_s/D well below 1; the bending of
-        # bodies fades out between R_s/D = 0.05 and 0.1.
+            return 1.0
         k = c["Rs"] / c["D"]
-        fade = max(0.0, min(1.0, (cls.BODY_KMAX - k) / (cls.BODY_KMAX - cls.BODY_KMIN)))
-        return w * fade
+        return max(0.0, min(1.0, (cls.BODY_KMAX - k) / (cls.BODY_KMAX - cls.BODY_KMIN)))
+
+    @classmethod
+    def weight(cls, Ds):
+        """Fraction of the deflection seen by a point source at distance Ds
+        (the markers): (Ds - D)/Ds times wscale()."""
+        c = cls.current
+        if c is None or Ds <= c["D"]:
+            return 0.0
+        return (Ds - c["D"]) / Ds * cls.wscale()
 
     @classmethod
     def apparent(cls, v, w):
@@ -498,11 +577,84 @@ class Lensing(object):
         return (vx/m, vy/m, vz/m)
 
     @classmethod
-    def secondary(cls, w):
-        """Whether a body with bending fraction w gets its secondary image:
-        a black hole is the lens and the body is far beyond it."""
+    def ship_dir(cls, d):
+        """A background-frame direction as the ship sees it (lens_to_ship)."""
         c = cls.current
-        return c is not None and c["is_hole"] and not c["rain"] and w > 0.5 and cls._inv_rows is not None
+        nx, ny, nz = c["n"]; u = c["u"]; inv = c["inv"]
+        dx, dy, dz = d
+        cc = dx*nx + dy*ny + dz*nz
+        tmv = 0.5*((dx+nx)**2 + (dy+ny)**2 + (dz+nz)**2) if cc < 0.0 else 1.0 + cc
+        vpar = -cc
+        px, py, pz = -dx - vpar*nx, -dy - vpar*ny, -dz - vpar*nz
+        a = inv*vpar - u*tmv
+        t = inv + u*tmv
+        vx, vy, vz = -(px + a*nx)/t, -(py + a*ny)/t, -(pz + a*nz)/t
+        m = (vx*vx + vy*vy + vz*vz) ** 0.5
+        return (vx/m, vy/m, vz/m)
+
+    @classmethod
+    def image_near(cls, p, branch=0):
+        """numpy twin of the shader's lens_apparent_near: p = source position
+        in the background frame with the ship at the origin; the image
+        direction, or None when the near table has nothing for it."""
+        c = cls.current
+        if c is None or cls._ray_rows is None:
+            return None
+        import numpy as np
+        phi_in, phi_out, rho = cls._ray_rows
+        hx, hy, hz = c["h"]; D = c["D"]; Rs = c["Rs"]
+        qx, qy, qz = p[0] - D*hx, p[1] - D*hy, p[2] - D*hz
+        r = (qx*qx + qy*qy + qz*qz) ** 0.5
+        if r <= Rs or r >= Rs*RHO_MAX:
+            return None
+        qx, qy, qz = qx/r, qy/r, qz/r
+        cpsi = max(-1.0, min(1.0, -(hx*qx + hy*qy + hz*qz)))
+        psi = math.acos(cpsi)
+        ex, ey, ez = qx + cpsi*hx, qy + cpsi*hy, qz + cpsi*hz
+        el = (ex*ex + ey*ey + ez*ez) ** 0.5
+        ex, ey, ez = (ex/el, ey/el, ez/el) if el > 1e-6 else (0.0, 0.0, 0.0)
+        # bilinear row at this rho (log grid)
+        NR = rho.size; N = phi_in.shape[0]
+        v = math.log(r / Rs) / math.log(RHO_MAX) * (NR - 1)
+        j = max(0, min(NR - 2, int(v))); f = v - j
+        def row(arr):
+            return arr[:, j]*(1.0 - f) + arr[:, j + 1]*f
+        th = np.pi*(np.arange(N) + 0.5)/N
+        def solve(col, target):
+            ok = col >= 0.0
+            d = col - target
+            for i in range(N - 1):
+                if ok[i] and ok[i + 1] and d[i]*d[i + 1] <= 0.0:
+                    t = d[i] / (d[i] - d[i + 1]) if d[i] != d[i + 1] else 0.0
+                    return th[i] + t*(th[i + 1] - th[i])
+            return None
+        if branch == 0:
+            t_ = solve(row(phi_in), psi)
+            if t_ is None:
+                t_ = solve(row(phi_out), psi)
+            if t_ is None:
+                return None
+            ct, st = math.cos(t_), math.sin(t_)
+            return (hx*ct + ex*st, hy*ct + ey*st, hz*ct + ez*st)
+        t_ = solve(row(phi_out), 2.0*math.pi - psi)
+        if t_ is None:
+            return None
+        ct, st = math.cos(t_), math.sin(t_)
+        return (hx*ct - ex*st, hy*ct - ey*st, hz*ct - ez*st)
+
+    @classmethod
+    def near_table(cls):
+        """Whether the 2-D ray table for sources near the hole is bound."""
+        c = cls.current
+        return c is not None and c["is_hole"] and not c["rain"] and cls._ray_rows is not None
+
+    @classmethod
+    def secondary(cls, wscale):
+        """Whether bodies get a second pass for their secondary image: a
+        black hole is the lens (the shader keeps the pass to the vertices
+        well beyond the hole)."""
+        c = cls.current
+        return c is not None and c["is_hole"] and not c["rain"] and wscale > 0.0 and cls._inv_rows is not None
 
     @classmethod
     def bind_table(cls, unit=4):
@@ -544,9 +696,31 @@ class Lensing(object):
                 for th in data:
                     flat += [th, 0.0, 0.0, 1.0]
                 glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, cls.TABLE_N, 0, GL_RGBA, GL_FLOAT, (GLfloat*len(flat))(*flat))
+            # the 2-D ray table for sources near the hole
+            rt = ray_table(c["Rs"], c["D"], cls.TABLE_N) if not c["rain"] else None
+            cls._ray_rows = rt
+            if rt is not None:
+                import numpy as np
+                phi_in, phi_out, rho = rt
+                data = np.zeros((phi_in.shape[1], phi_in.shape[0], 4), dtype=np.float32)   # rows = rho, cols = theta
+                data[:, :, 0] = phi_in.T; data[:, :, 1] = phi_out.T; data[:, :, 3] = 1.0
+                glActiveTexture(GL_TEXTURE0 + unit + 3)       # never on unit 0: the sky's texture lives there
+                if cls._ray_tex is None:
+                    cls._ray_tex = glGenTextures(1)
+                    glBindTexture(GL_TEXTURE_2D, cls._ray_tex)
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+                glBindTexture(GL_TEXTURE_2D, cls._ray_tex)
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, phi_in.shape[0], phi_in.shape[1], 0, GL_RGBA, GL_FLOAT, data)
+                glActiveTexture(GL_TEXTURE0)
             cls._table_key = key
         if key[1] is None:
             return False
+        if cls._ray_rows is not None:
+            glActiveTexture(GL_TEXTURE0 + unit + 3)
+            glBindTexture(GL_TEXTURE_2D, cls._ray_tex)
         glActiveTexture(GL_TEXTURE0 + unit)
         glBindTexture(GL_TEXTURE_1D, cls._table_tex)
         glActiveTexture(GL_TEXTURE0 + unit + 1)
@@ -567,7 +741,9 @@ class Lensing(object):
             # makes every draw fail with GL_INVALID_OPERATION (no sky at all)
             glUniform1i(glGetUniformLocation(program, "lens_table"), table_unit)
             glUniform1i(glGetUniformLocation(program, "lens_tinv"), table_unit + 1)
+            glUniform1i(glGetUniformLocation(program, "lens_ray"), table_unit + 3)
             glUniform1i(glGetUniformLocation(program, "lens_tinv2"), table_unit + 2)
+            glUniform1i(glGetUniformLocation(program, "lens_ray"), table_unit + 3)
             glUniform1f(glGetUniformLocation(program, "lens_branch"), 0.0)
         if c is None or w <= 0.0:
             glUniform1f(glGetUniformLocation(program, "lens_k"), 0.0)
@@ -581,5 +757,97 @@ class Lensing(object):
         glUniform1f(glGetUniformLocation(program, "lens_inv"), c["inv"])
         exact = table_unit is not None and cls.bind_table(table_unit)
         glUniform1f(glGetUniformLocation(program, "lens_exact"), 1.0 if exact else 0.0)
+        glUniform1f(glGetUniformLocation(program, "lens_D"), c["D"])
+        glUniform1f(glGetUniformLocation(program, "lens_rs"), c["Rs"])
+        glUniform1f(glGetUniformLocation(program, "lens_rhomax"), RHO_MAX)
+        glUniform1f(glGetUniformLocation(program, "lens_finite"), 1.0 if (exact and cls._ray_rows is not None) else 0.0)
         if loc >= 0:
             glUniform1f(loc, w)
+
+
+# ----------------------------------------------------------- finite sources
+# For bodies near the hole (its disc, its planets) a source is at a finite
+# radius rho from the hole, and its image is found by connecting it to the
+# observer with a real light path: ray_table gives, for each view angle
+# theta and radius rho, the polar angle the ray has swept (about the hole,
+# from the observer) when it reaches rho, on its inbound leg (before
+# periapsis) and on its outbound leg.  The vertex shader then solves
+# sweep(theta, rho) = psi for theta, psi being the angle at the hole
+# between the observer and the source (primary image), and
+# sweep_out(theta, rho) = 2 pi - psi for the secondary image round the
+# far side.
+RHO_N = 64
+RHO_MAX = 80.0        # in Schwarzschild radii; farther sources use the 1-D tables
+
+
+def ray_table(Rs, r_o, N=256, NR=RHO_N, rho_max=RHO_MAX):
+    """numpy: arrays phi_in[N, NR], phi_out[N, NR] (radians; -100 where the
+    leg does not reach that radius) on a log grid of rho from Rs to
+    rho_max Rs, for a static observer at r_o."""
+    import numpy as np
+    f = 1.0 - Rs/r_o
+    if f <= 0.0:
+        return None
+    sf = math.sqrt(f)
+    bc = 1.5*math.sqrt(3.0)*Rs
+    th = np.pi*(np.arange(N) + 0.5)/N
+    b = r_o*np.sin(th)/sf
+    u_o = 1.0/r_o
+    rho = Rs*np.exp(np.log(rho_max)*np.arange(NR)/(NR - 1.0))      # Rs .. rho_max Rs
+    u_grid = 1.0/rho                                                 # decreasing
+    # undefined: -100, so a bilinear blend with a real value stays negative
+    phi_in = -100.0*np.ones((N, NR)); phi_out = -100.0*np.ones((N, NR))
+    M = 400
+    s = (np.arange(M) + 0.5)/M
+    def g(u, bb):
+        return 1.0/(bb*bb) - u*u + Rs*u*u*u
+    def periapsis(bb):
+        u = 1.0/bb
+        for _ in range(60):
+            gu = g(u, bb); dg = -2.0*u + 3.0*Rs*u*u
+            if abs(dg) < 1e-300: break
+            un = u - gu/dg
+            if un <= 0.0: un = 0.5*u
+            if abs(un - u) < 1e-14*max(u, 1e-300):
+                u = un; break
+            u = un
+        return u
+    for i in range(N):
+        bb = b[i]
+        if th[i] < 0.5*np.pi:
+            if bb > bc*(1.0 + 1e-9):
+                up = periapsis(bb)
+                if up < u_o:          # periapsis outside the observer: no such ray
+                    continue
+                # inbound: u from u_o to u_p, u = u_p - (u_p - u_o) s^2 (regular at u_p)
+                uu = up - (up - u_o)*s*s
+                integ = 2.0*(up - u_o)*s/np.sqrt(np.maximum(g(uu, bb), 1e-300))
+                # cumulative from s = 0 (u = u_p) ... we want from u_o (s = 1): integrate from s=1 down
+                cum = np.cumsum(integ[::-1])/M            # from s=1 (u_o) toward s=0 (u_p)
+                phi_u = cum[::-1]                          # at each s: sweep from u_o to that u
+                # at grid radii between r_o and r_p (u_o <= u <= u_p)
+                mask = (u_grid >= u_o) & (u_grid <= up)
+                phi_in[i, mask] = np.interp(u_grid[mask], uu[::-1], phi_u[::-1])
+                tot_in = cum[-1]
+                # outbound: u from u_p down to 0, u = u_p (1 - t^2)
+                uu2 = up*(1.0 - s*s)
+                integ2 = 2.0*up*s/np.sqrt(np.maximum(g(uu2, bb), 1e-300))
+                cum2 = np.cumsum(integ2)/M                 # from u_p outward
+                mask2 = u_grid <= up
+                phi_out[i, mask2] = tot_in + np.interp(u_grid[mask2], uu2[::-1], cum2[::-1])
+            else:
+                # plunging: inbound from u_o to the horizon u = 1/Rs, no periapsis
+                uh = 1.0/Rs
+                uu = u_o + (uh - u_o)*s
+                integ = (uh - u_o)/np.sqrt(np.maximum(g(uu, bb), 1e-300))
+                phi_u = np.cumsum(integ)/M
+                mask = (u_grid >= u_o) & (u_grid <= uh)
+                phi_in[i, mask] = np.interp(u_grid[mask], uu, phi_u)
+        else:
+            # outbound from the start: u from u_o down to 0
+            uu = u_o*(1.0 - s)
+            integ = u_o/np.sqrt(np.maximum(g(uu, bb), 1e-300))
+            phi_u = np.cumsum(integ)/M
+            mask = u_grid <= u_o
+            phi_out[i, mask] = np.interp(u_grid[mask], uu[::-1], phi_u[::-1])
+    return phi_in, phi_out, rho

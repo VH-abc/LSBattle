@@ -126,6 +126,15 @@ class Play(object):
                         BOX.toggle_visual()
                     elif key == sdl2.SDLK_m:
                         BOX.set_flag("SOUND", not BOX.SOUND)
+                    elif key == sdl2.SDLK_t:
+                        from sequence.teleport import Teleport, teleport_to
+                        sdl2.SDL_ShowCursor(1)
+                        entry = Teleport().mainloop()
+                        sdl2.SDL_ShowCursor(0)
+                        if entry is not None:
+                            teleport_to(self.world, entry)
+                        self.keys.load_config()
+                        last_tick = sdl2.SDL_GetTicks()
                     elif key == sdl2.SDLK_l:
                         BOX.set_flag("GLARE", not BOX.GLARE)
                     elif key == sdl2.SDLK_b:

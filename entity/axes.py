@@ -14,6 +14,7 @@ import math
 from OpenGL.GL import *
 
 from go import Vector3, Vector4D
+from program.utils.lensing import Lensing
 from program.box import BOX
 from program.text import drawSentence3d
 from program.utils import boost
@@ -53,6 +54,11 @@ class AxisMarkers(object):
             # Apparent direction of the source in the rest frame.
             n = Vector3(-kp.x, -kp.y, -kp.z)
             n.normalize()
+            if Lensing.current is not None:
+                # a marker at infinity is bent round the lens like the sky
+                lw = Lensing.weight(1.0e30)
+                if lw > 0.0:
+                    n = Vector3(*Lensing.apparent((n.x, n.y, n.z), lw))
             pos = Vector4D(0.0, n.x*dist, n.y*dist, n.z*dist)
 
             # Doppler factor of the photon: >1 ahead (blue), <1 behind.

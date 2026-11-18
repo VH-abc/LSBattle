@@ -49,6 +49,19 @@ class Game(object):
                     else:
                         self.play_loop(mode)
                     top = True
+            elif flg == title.TELEPORT:
+                from sequence.teleport import Teleport
+                entry = Teleport().mainloop()
+                if entry is not None:
+                    label, body, prefix = entry
+                    i = BOX.preset_index(prefix)
+                    if i is not None:
+                        BOX.apply_preset(i)
+                    BOX.set_spawn(body)
+                    self.travel_loop(choicemode.TRAVEL)
+                    top = True
+                else:
+                    top = False
             elif flg == title.OPTION:
                 option.mainloop()
                 top = False

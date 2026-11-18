@@ -538,7 +538,7 @@ World {
             star {
                 hp = 10000000000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Ember             # hot dwarf star at 7 Schwarzschild radii of Abyss: period 454 s, 0.27c; lights the planets
+                name = Pyre              # hot dwarf star at 7 Schwarzschild radii of Abyss: period 454 s, 0.27c; lights the planets
                 mass = 6e+29              # kg
                 orbital_phi = 60.0        # float -180<=x<=180
                 orbital_theta = -8.0        # float -90<=x<=90

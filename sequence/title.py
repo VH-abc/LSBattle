@@ -16,6 +16,7 @@ class Title(object):
     OPTION  = 1
     RANKING = 2
     QUIT    = 3
+    TELEPORT = 4          # the t key: straight to the Travel-to menu, then a travel game there
     def __init__(self):
         self.message = "Press Any Key"
         self.texts = ["Start",
@@ -60,6 +61,8 @@ class Title(object):
                         self.menu.up()
                     elif key == sdl2.SDLK_DOWN:
                         self.menu.down()
+                    elif key == sdl2.SDLK_t:
+                        return self.TELEPORT
                     elif key in KS_RETURN:
                         return self.menu.choice
                 elif event.type == sdl2.SDL_MOUSEBUTTONDOWN:

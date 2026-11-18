@@ -58,13 +58,16 @@ class Settings(object):
                 "Sound: %s  (m)%s" % (("On, %d%%" % round(100*BOX.VOLUME)) if BOX.SOUND else "Off",
                                   "  Bathed in the Light, K. MacLeod, CC BY" if BOX.music_credit else ""),
                 "Sound effects: %s" % ("On" if BOX.EFFECTS else "Off"),
-                "Travel to: %s  (<- -> choose; Enter: go there, apply its preset, start in orbit)%s" % (
+                "Travel to: %s  (<- ->, Enter; or t anywhere)%s" % (
                     BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)][0], "" if self.world is not None else "  [in game only]")]
 
     def init(self, choice=0):
         texts = self.texts()
         # row height: fit every entry plus the title and the return item on screen
-        self.menu = MenuItems(texts, min(BOX.Y/16, BOX.Y/(len(texts) + 4)), ret=True, title="Settings")
+        # rows fit under the title (a tenth of the height) above the Return
+        # item: n rows with 30% spacing in about 0.78 of the height
+        h = min(BOX.Y/16, 0.78*BOX.Y/(1.3*len(texts)))
+        self.menu = MenuItems(texts, h, ret=True, title="Settings", ofy=-0.045*BOX.Y)
         self.menu.choice = choice
 
     def step_impulse(self, direction):
@@ -128,13 +131,8 @@ class Settings(object):
         elif choice == self.EFFECTS:
             BOX.set_flag("EFFECTS", not BOX.EFFECTS)
         elif choice == self.GOTO and self.world is not None:
-            label, body, prefix = BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)]
-            i = BOX.preset_index(prefix)
-            if i is not None:
-                BOX.apply_preset(i)
-                self.world.player.acceleration = BOX.ACCEL
-            self.world.start_in_orbit(body, self.world.spawn_factor(body))
-            BOX.set_spawn(body)
+            from sequence.teleport import teleport_to
+            teleport_to(self.world, BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)])
             self.resume = True
 
     def mainloop(self):

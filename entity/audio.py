@@ -179,7 +179,7 @@ THEMES = {
     "forge":       dict(root=4, mode="major", bpm=165.0, style="driving", seed=5),
     "cinder":      dict(root=4, mode="major", bpm=140.0, style="bright", seed=31),
     "abyss":       dict(root=6, mode="minor", bpm=66.0, style="dark", seed=3),
-    "ember":       dict(root=1, mode="minor", bpm=170.0, style="driving", seed=32),
+    "pyre":        dict(root=1, mode="minor", bpm=170.0, style="driving", seed=32),
     "ash":         dict(root=6, mode="minor", bpm=90.0, style="calm", seed=33),
     "blackhole":   dict(root=11, mode="minor", bpm=80.0, style="dark", seed=13),
 }

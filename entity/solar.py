@@ -294,7 +294,10 @@ class Star(object):
                 Rg = Rg * Quaternion.from_ax(phase, Vector3(*self.spin_axis)).get_RotMat()
             # only the globe is enlarged (a lensed body's apparent size), not its disc or ring
             if not hide_globe:
+                c = Lensing.current
+                self.model.is_lens = c is not None and c["body"] is self
                 self.model.draw(Xp, L, LL, X=X, U=U, R=Rg, scale=scale, gshift=gshift)
+                self.model.is_lens = False
             if disc and self.disk is not None:      # an accretion disc glows: drawn in the glare pass too
                 self.disk.draw(Xp, L, LL, X, R, Xp.t, scale=scale, gshift=gshift)
             if ring and self.ring is not None:

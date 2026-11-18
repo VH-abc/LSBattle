@@ -115,7 +115,7 @@ uniform float light_on;  // 0: self-luminous, 1: sphere (Lambert), 2: thin disc 
 uniform float g_shift;   // gravitational redshift factor of the emitter (1 = none)
 uniform float disc_Rs;   // >0: accretion disc; mesh units per Schwarzschild radius
 uniform float disc_spin; // +1 / -1: sense of rotation about the mesh +y axis
-uniform float lens_w;    // fraction of the lens deflection this body sees (0: none)
+uniform float lens_w;    // scale of the bending (1: a black hole's exact table; 0: none)
 """ + boost.GLSL + LENS_GLSL + """
 varying float ratio;
 varying float shade;
@@ -160,7 +160,31 @@ void main() {
     if (lens_w > 0.0 && lens_k > 0.0) {
         // beyond a lens: the vertex is seen where its primary image is
         float dist = length(P);
-        if (dist > 0.0) P = lens_to_ship(lens_apparent(lens_to_lab(P / dist), lens_w)) * dist;
+        // each vertex sees the fraction (d - D)/d of the deflection for its
+        // own distance d beyond the lens at D: a disc's far side bends up
+        // over the hole, its near side and the hole itself stay put
+        if (dist > 0.0) {
+            vec3 dl = lens_to_lab(P / dist);
+            vec3 img = vec3(0.0);
+            if (lens_finite > 0.5 && lens_w > 0.0) {
+                // a source near the hole: its image from the real light path
+                // between its true position and the ship (primary, or the
+                // secondary round the far side on the second pass)
+                img = lens_apparent_near(dl * dist, lens_branch);
+            }
+            if (dot(img, img) < 0.5) {
+                if (lens_branch > 0.5 && lens_finite > 0.5) {
+                    // no secondary image for this vertex: drop its triangles
+                    P = vec3(0.0 / 0.0);
+                    img = dl;
+                } else {
+                    // beyond the near table: a far source, the 1-D tables
+                    float wv = lens_w * max(0.0, (dist - lens_D) / dist);
+                    if (wv > 0.0) img = lens_apparent(dl, wv); else img = dl;
+                }
+            }
+            if (P == P) P = lens_to_ship(img) * dist;
+        }
     }
     gl_Position = gl_ModelViewProjectionMatrix * vec4(P, 1.0);
     %s
@@ -348,7 +372,8 @@ class Polygon(MqoGpoPolygon):
         else:
             lx = ly = lz = 0.0; lmode = 0
         dRs, dspin = self.disc if self.disc is not None else (0.0, 1.0)
-        lens_w = Lensing.weight(-dX.t)
+        lens_w = 0.0 if getattr(self, "is_lens", False) else Lensing.wscale()
+        lens_wbody = Lensing.weight(-dX.t)        # the body's own fraction (its centre)
         glVertexPointer(3, GL_FLOAT, 0, self.vertices)
         glTexCoordPointer(2, GL_FLOAT, 0, self.texcoords)
         program = 0
@@ -389,7 +414,7 @@ class Polygon(MqoGpoPolygon):
                         blackbody.set_uniforms(self.program_tex, BOX.exposure(), self.temperature, lmode > 0)
                     program = self.program_tex
             glDrawElements(GL_TRIANGLES, n, GL_UNSIGNED_INT, indices)
-            if Lensing.secondary(lens_w):
+            if (lens_wbody > 0.9 or Lensing.near_table()) and Lensing.secondary(lens_w) and not getattr(self, "is_lens", False):
                 # a black hole's secondary image of the body, round its far side
                 loc = glGetUniformLocation(program, "lens_branch")
                 glUniform1f(loc, 1.0)

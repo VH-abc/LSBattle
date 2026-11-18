@@ -11,7 +11,7 @@ https://news.ycombinator.com/item?id=9247460
 
 Themes per body: the Sun's is the track above (A major); Earth, the Moon,
 Venus, Mars, Jupiter, Saturn, the neutron star, Sirius, Proxima,
-Betelgeuse, Helios, Forge, Cinder, Abyss, Ember, Ash and the Gaia black
+Betelgeuse, Helios, Forge, Cinder, Abyss, Pyre, Ash and the Gaia black
 hole have chiptune loops the game generates itself, in A, D or E major or
 F sharp, B or C sharp minor: keys sharing six or seven notes with it.
 Other bodies play their primary's.  Each plays from its body, Doppler-shifted by the body's
