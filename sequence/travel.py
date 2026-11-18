@@ -223,12 +223,20 @@ class Travel(object):
                 self.start_message.draw_center()
 
             if self.keys.k_map == 1:
-                g = self.world.player.P.U.get_gamma()
+                # speed relative to the highlighted body (the brake's reference),
+                # the invariant gamma = -U_ship . U_body; the world frame if none
+                U = self.world.player.P.U
+                ref = self.world.solar.dominant(self.world.player.P.X)
+                if ref is not None:
+                    Ub = ref.U
+                    g = U.t*Ub.t - U.x*Ub.x - U.y*Ub.y - U.z*Ub.z
+                else:
+                    g = U.get_gamma()
                 u = sqrt(max(0.0, 1.0 - 1.0/g**2)) if g == g and g >= 1.0 else 0.0
                 v = c * u
                 text = "Stage: %i\n"%self.level.stage
                 text += "FPS: %i\n"%(fps.get())
-                text += "Speed: {:,d}m/s\n".format(int(v))
+                text += "Speed: {:,d}m/s%s\n".format(int(v)) % ((" rel. %s" % ref.name) if ref is not None else "")
                 text += "       %.3fc\n"%(u)
                 text += "Lorentz factor: %.1f\n"%(g)
                 text += "Thomas rotation: %.1f deg\n"%(self.world.player.wigner_angle*180.0/pi)
