@@ -166,6 +166,7 @@ class Star(object):
     MIN_GLARE_PX = 4.0      # a body drawn smaller than this radius is enlarged to it, dimmed to match (rasterisation of a smaller disc is too coarse to conserve flux)
     LADDER_TOP = 0.9 * 65536  # encoded radiance the exposure ladder in the glare pass still resolves (~850,000x linear)
     MAX_ENLARGE = 1.0       # past the ladder the source simply clips: an enlarged source makes a halo with a rim
+    LADDER_MARGIN = 16.0    # encoded-radiance allowance (~450x linear, a Doppler factor of 4.6) for a body's shifts varying across its image, when deciding whether a dim ladder pass can skip it
 
     def draw_glare(self, Xp, L, LL, gshift=1.0, scale=1.0):
         """Draw this body as a glare source: its rendered radiance divided by
@@ -199,6 +200,16 @@ class Star(object):
             b_disp = (self.brightness / self.GLARE_REF) * gshift ** (4.0/2.2) * D ** (4.0/2.2)
             if b_disp > self.LADDER_TOP:
                 enlarge = max(enlarge, min(self.MAX_ENLARGE, (b_disp / self.LADDER_TOP) ** (2.2/2.0)))
+            # the ladder's pass at scale k only matters where the pass before
+            # it (16x brighter) saturated: a body whose encoded radiance
+            # cannot reach that, even allowing LADDER_MARGIN for the shifts
+            # varying across its image, is left out of the pass (most of the
+            # ladder's cost was planets drawn five times)
+            if scale < 1.0:
+                b_src = max(self.brightness, self.disk.brightness if self.disk is not None else 0.0)
+                b_src *= gshift ** (4.0/2.2) * D ** (4.0/2.2) / (self.GLARE_REF * enlarge ** (2.0/2.2))
+                if b_src * 16.0 * scale * self.LADDER_MARGIN < 0.9:
+                    return
         # (a lens makes the body really look bigger, at the same surface brightness)
         self._draw_globe(Xp, L, LL, ring=False, scale=scale/(self.GLARE_REF*enlarge**(2.0/2.2)), gshift=gshift,
                          enlarge=enlarge*Lensing.enlarge(self))
