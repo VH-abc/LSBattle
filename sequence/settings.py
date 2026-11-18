@@ -58,7 +58,7 @@ class Settings(object):
                 "Sound: %s  (m)%s" % (("On, %d%%" % round(100*BOX.VOLUME)) if BOX.SOUND else "Off",
                                   "  Bathed in the Light, K. MacLeod, CC BY" if BOX.music_credit else ""),
                 "Sound effects: %s" % ("On" if BOX.EFFECTS else "Off"),
-                "Travel to: %s  (<- ->, Enter; or t anywhere)%s" % (
+                "Travel to: %s  (<- ->, Enter; or p anywhere)%s" % (
                     BOX.SYSTEMS[self.goto_i % len(BOX.SYSTEMS)][0], "" if self.world is not None else "  [in game only]")]
 
     def init(self, choice=0):

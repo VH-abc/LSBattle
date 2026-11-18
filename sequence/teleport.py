@@ -1,7 +1,7 @@
 # coding: utf8
 # sequence/teleport.py
 """
-The Travel-to menu: the list of systems (BOX.SYSTEMS), reached with the t
+The Travel-to menu: the list of systems (BOX.SYSTEMS), reached with the p
 key from the title screen or during play.  Choosing one applies the
 system's preset, puts the ship in orbit there and makes it the spawn.
 """
@@ -51,7 +51,7 @@ class Teleport(object):
                     BOX.game_quit()
                 elif event.type == sdl2.SDL_KEYDOWN:
                     key = event.key.keysym.sym
-                    if key in KS_ESC or key == sdl2.SDLK_t:
+                    if key in KS_ESC or key == sdl2.SDLK_p:
                         return None
                     elif key == sdl2.SDLK_UP:
                         self.menu.up()

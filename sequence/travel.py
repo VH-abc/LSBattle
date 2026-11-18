@@ -118,7 +118,7 @@ class Travel(object):
                         BOX.toggle_visual()
                     elif key == sdl2.SDLK_m:
                         BOX.set_flag("SOUND", not BOX.SOUND)
-                    elif key == sdl2.SDLK_t:
+                    elif key == sdl2.SDLK_p:
                         from sequence.teleport import Teleport, teleport_to
                         sdl2.SDL_ShowCursor(1)
                         entry = Teleport().mainloop()
