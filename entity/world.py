@@ -407,12 +407,16 @@ class World(object):
         if BOX.GLARE:
             sky_args = (matrix_i, self.player.P.U, (Xp - sun) if sun is not None else None, weight)
             def sources(k):
+                from model.polygon import Polygon
+                Polygon.secondary_ok = (k == 1.0)
                 if k == 1.0:
                     glDisable(GL_DEPTH_TEST)
                     self.sky.draw(*sky_args, scale=1.0/self.solar.GLARE_REF, gshift=fo)
                     glEnable(GL_DEPTH_TEST)
                 self.solar.draw_glare(Xp, L, LL, scale=k)
             self.glare.apply(sources)
+            from model.polygon import Polygon
+            Polygon.secondary_ok = True
 
         if BOX.AUTOEXP and BOX.COLOR_MODE == "ACCURATE":
             self._auto_exposure()

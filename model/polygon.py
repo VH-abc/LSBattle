@@ -266,6 +266,7 @@ def _fs():
 
 _polygon_cache = {}
 class Polygon(MqoGpoPolygon):
+    secondary_ok = True        # the glare ladder's dim passes skip the secondary images
 
     def load_program_tex(self):
         self.program_tex = compile_program(
@@ -414,7 +415,7 @@ class Polygon(MqoGpoPolygon):
                         blackbody.set_uniforms(self.program_tex, BOX.exposure(), self.temperature, lmode > 0)
                     program = self.program_tex
             glDrawElements(GL_TRIANGLES, n, GL_UNSIGNED_INT, indices)
-            if (lens_wbody > 0.9 or Lensing.near_table()) and Lensing.secondary(lens_w) and not getattr(self, "is_lens", False):
+            if Polygon.secondary_ok and (lens_wbody > 0.9 or Lensing.near_table()) and Lensing.secondary(lens_w) and not getattr(self, "is_lens", False):
                 # a black hole's secondary image of the body, round its far side
                 loc = glGetUniformLocation(program, "lens_branch")
                 glUniform1f(loc, 1.0)

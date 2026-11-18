@@ -42,6 +42,7 @@ uniform vec3 lens_n;
 uniform float lens_u, lens_inv;
 uniform float lens_exact;        // 1: a black hole; the sky map comes from the table below
 uniform sampler1D lens_table;    // view angle from the hole (0..pi) -> (source angle, shadow flag, frequency factor)
+float lens_gs = 1.0;             // set by lens_source: observed/emitted frequency of the sky in that direction (exact table only)
 uniform sampler1D lens_tinv;     // source angle (0..pi) -> view angle of its primary image (the table inverted)
 uniform sampler1D lens_tinv2;    // source angle (0..pi) -> view angle of its secondary image (wrapped round the far side)
 uniform float lens_branch;       // 0: primary image; 1: secondary (a second pass over the body)
@@ -55,27 +56,30 @@ vec2 lens_sweep(float th, float v) {
     return texture2D(lens_ray, vec2(th * 0.31830988618379067, v)).rg;
 }
 // view angle th of the image of a source at radius rho (log-grid coordinate v)
-// and sweep angle target, on leg 0 (inbound, sweep rising with th) or leg 1
-// (outbound, sweep falling with th); returns -1 when there is none
-// (edge: on the inbound leg, accept the end of its domain, the ray tangent
-// to the source's radius, when the target is not bracketed before it)
+// and sweep angle target, on leg 0 (inbound, sweep rising with th, defined
+// from th = 0 to the tangent ray) or leg 1 (outbound, sweep falling with th,
+// defined from the shadow's edge to the tangent ray or to pi); bisection on
+// that domain.  -1 when the target lies outside the leg's range; with edge,
+// leg 0 returns its tangent end when the target lies beyond it.
 float lens_solve(int leg, float v, float target, bool edge) {
-    // coarse scan for the bracket
-    float lo = -1.0, hi = -1.0, flo = 0.0, fhi = 0.0;
-    float prev_th = -1.0, prev_f = -1.0;
-    for (int i = 0; i < 128; i++) {
-        float th = (float(i) + 0.5) * 3.14159265358979 / 128.0;
-        vec2 sw = lens_sweep(th, v);
-        float f = (leg == 0) ? sw.r : sw.g;
-        if (f >= 0.0 && prev_f >= 0.0) {
-            if ((prev_f - target) * (f - target) <= 0.0) { lo = prev_th; hi = th; flo = prev_f; fhi = f; break; }
-        } else if (edge && leg == 0 && prev_f >= 0.0 && f < 0.0 && prev_f < target) {
-            lo = prev_th; hi = th; flo = prev_f; fhi = target; break;
-        }
-        prev_th = th; prev_f = f;
+    vec4 row = texture2D(lens_ray, vec2(0.5, v));
+    float lo, hi;
+    if (leg == 0) {
+        if (row.b < 0.0) return -1.0;
+        lo = 0.0062; hi = row.b;                       // from the first texel's centre
+    } else {
+        if (row.a < 0.0) return -1.0;
+        lo = row.a; hi = (row.b > 0.0) ? row.b : 3.1354;
     }
-    if (lo < 0.0) return -1.0;
-    for (int i = 0; i < 8; i++) {
+    vec2 slo = lens_sweep(lo, v), shi = lens_sweep(hi, v);
+    float flo = (leg == 0) ? slo.r : slo.g;
+    float fhi = (leg == 0) ? shi.r : shi.g;
+    if (flo < 0.0 || fhi < 0.0) return -1.0;
+    if ((flo - target) * (fhi - target) > 0.0) {
+        if (edge && leg == 0 && fhi < target) return hi;
+        return -1.0;
+    }
+    for (int i = 0; i < 14; i++) {
         float mid = 0.5*(lo + hi);
         vec2 sw = lens_sweep(mid, v);
         float f = (leg == 0) ? sw.r : sw.g;
@@ -84,7 +88,6 @@ float lens_solve(int leg, float v, float target, bool edge) {
     }
     return 0.5*(lo + hi);
 }
-float lens_gs = 1.0;             // set by lens_source: observed/emitted frequency of the sky in that direction (exact table only)
 // direction toward a source seen by the ship -> the same ray in the background frame
 vec3 lens_to_lab(vec3 v) {
     float c = dot(v, lens_n);
@@ -713,7 +716,22 @@ class Lensing(object):
                 import numpy as np
                 phi_in, phi_out, rho = rt
                 data = np.zeros((phi_in.shape[1], phi_in.shape[0], 4), dtype=np.float32)   # rows = rho, cols = theta
-                data[:, :, 0] = phi_in.T; data[:, :, 1] = phi_out.T; data[:, :, 3] = 1.0
+                data[:, :, 0] = phi_in.T; data[:, :, 1] = phi_out.T
+                # per row, the legs' domains in theta (row-constant): B = the
+                # inbound leg's last theta (the tangent ray; -1: none), A =
+                # the outbound leg's first theta (the shadow's edge; -1: none)
+                # ...conservative: the tightest of the row and its neighbours,
+                # a texel inside, so that a bilinear sample at the limit (which
+                # blends two rows) is still defined in both
+                N_ = phi_in.shape[0]; thg = np.pi*(np.arange(N_) + 0.5)/N_; dth = np.pi/N_
+                NR_ = phi_in.shape[1]
+                last_in = np.array([thg[np.where(phi_in[:, j] >= 0.0)[0][-1]] if (phi_in[:, j] >= 0.0).any() else -1.0 for j in range(NR_)])
+                first_out = np.array([thg[np.where(phi_out[:, j] >= 0.0)[0][0]] if (phi_out[:, j] >= 0.0).any() else 9.0 for j in range(NR_)])
+                for j in range(NR_):
+                    nb = slice(max(0, j - 1), min(NR_, j + 2))
+                    b = last_in[nb].min(); a = first_out[nb].max()
+                    data[j, :, 2] = (b - dth) if b > 0.0 and (b - dth) > 2.0*dth else -1.0
+                    data[j, :, 3] = (a + dth) if a < 8.0 else -1.0
                 glActiveTexture(GL_TEXTURE0 + unit + 3)       # never on unit 0: the sky's texture lives there
                 if cls._ray_tex is None:
                     cls._ray_tex = glGenTextures(1)
