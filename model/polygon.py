@@ -358,7 +358,7 @@ class Polygon(MqoGpoPolygon):
                 if self.program_col != program:
                     glUseProgram(self.program_col)
                     boost.set_uniforms(self.program_col, Urel, "rb")
-                    Lensing.set_uniforms(self.program_col, lens_w)
+                    Lensing.set_uniforms(self.program_col, lens_w, table_unit=4)
                     glUniformMatrix4fv(self.c_R_local, 1, GL_FALSE, R)
                     glUniform3fv(self.c_xpp_local, 1, xp_perp)
                     glUniform1f(self.c_xpl_local, xp_par)
@@ -375,7 +375,7 @@ class Polygon(MqoGpoPolygon):
                 if self.program_tex != program:
                     glUseProgram(self.program_tex)
                     boost.set_uniforms(self.program_tex, Urel, "rb")
-                    Lensing.set_uniforms(self.program_tex, lens_w)
+                    Lensing.set_uniforms(self.program_tex, lens_w, table_unit=4)
                     glUniformMatrix4fv(self.t_R_local, 1, GL_FALSE, R)
                     glUniform3fv(self.t_xpp_local, 1, xp_perp)
                     glUniform1f(self.t_xpl_local, xp_par)
@@ -389,4 +389,10 @@ class Polygon(MqoGpoPolygon):
                         blackbody.set_uniforms(self.program_tex, BOX.exposure(), self.temperature, lmode > 0)
                     program = self.program_tex
             glDrawElements(GL_TRIANGLES, n, GL_UNSIGNED_INT, indices)
+            if Lensing.secondary(lens_w):
+                # a black hole's secondary image of the body, round its far side
+                loc = glGetUniformLocation(program, "lens_branch")
+                glUniform1f(loc, 1.0)
+                glDrawElements(GL_TRIANGLES, n, GL_UNSIGNED_INT, indices)
+                glUniform1f(loc, 0.0)
         glUseProgram(0)

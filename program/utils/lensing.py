@@ -42,6 +42,9 @@ uniform vec3 lens_n;
 uniform float lens_u, lens_inv;
 uniform float lens_exact;        // 1: a black hole; the sky map comes from the table below
 uniform sampler1D lens_table;    // view angle from the hole (0..pi) -> (source angle, shadow flag, frequency factor)
+uniform sampler1D lens_tinv;     // source angle (0..pi) -> view angle of its primary image (the table inverted)
+uniform sampler1D lens_tinv2;    // source angle (0..pi) -> view angle of its secondary image (wrapped round the far side)
+uniform float lens_branch;       // 0: primary image; 1: secondary (a second pass over the body)
 float lens_gs = 1.0;             // set by lens_source: observed/emitted frequency of the sky in that direction (exact table only)
 // direction toward a source seen by the ship -> the same ray in the background frame
 vec3 lens_to_lab(vec3 v) {
@@ -98,6 +101,19 @@ vec3 lens_apparent(vec3 d, float w) {
     float el = length(e);
     if (el < 1e-6) return d;
     e /= el;
+    if (lens_exact > 0.5) {
+        // a black hole: the sky table inverted gives the primary image of a
+        // source at infinity; a nearer source sees the fraction w of the shift
+        if (lens_branch > 0.5) {
+            // the secondary image: the ray went round the far side, so the
+            // image is on the opposite side of the hole, inside the Einstein ring
+            float th2 = texture1D(lens_tinv2, beta * 0.31830988618379067).r;
+            return lens_h*cos(th2) - e*sin(th2);
+        }
+        float thx = texture1D(lens_tinv, beta * 0.31830988618379067).r;
+        float thw = beta + (thx - beta) * w;
+        return lens_h*cos(thw) + e*sin(thw);
+    }
     // solve th - alpha(th) w = beta outside the Einstein ring: the
     // first-order closed form, then Newton's method
     float th = 0.5*(beta + sqrt(beta*beta + 8.0*lens_k*w));
@@ -271,6 +287,59 @@ def rain_table(Rs, r, N=256):
     return [row if row is not None else (0.0, 1.0, 1.0) for row in out]
 
 
+def inverse_rows(rows, N=None):
+    """A sky table inverted, on two branches: for source angles beta on a
+    uniform grid over 0..pi, the view angle of the primary image, and of
+    the secondary image (the ray went round the far side of the hole, so
+    that image lies on the opposite side, between the Einstein ring and the
+    shadow).  Walking the table inward from theta = pi (beta = pi, no
+    deflection) beta falls monotonically: through 0 at the Einstein ring
+    (end of the primary branch), on to -pi (the secondary branch, as -beta)
+    and further round (higher orders, left out)."""
+    n = len(rows)
+    N = N or n
+    prim, sec = [], []          # (beta, theta) along each branch
+    last = None
+    for i in range(n - 1, -1, -1):
+        beta, shadow = rows[i][0], rows[i][1]
+        th = pi*(i + 0.5)/n
+        if shadow > 0.5 or (last is not None and beta >= last):
+            break
+        last = beta
+        if beta >= 0.0:
+            prim.append((beta, th))
+        elif beta >= -pi:
+            sec.append((-beta, th))
+        else:
+            break
+    def grid(pts, fallback):
+        if len(pts) < 2:
+            return [fallback(j) for j in range(N)]
+        pts = sorted(pts)
+        bs = [b for b, _ in pts]; ts = [t for _, t in pts]
+        out = []
+        for j in range(N):
+            b = pi*(j + 0.5)/N
+            if b <= bs[0]:
+                out.append(ts[0]); continue
+            if b >= bs[-1]:
+                out.append(ts[-1]); continue
+            lo, hi = 0, len(bs) - 1
+            while hi - lo > 1:
+                mid = (lo + hi) // 2
+                if bs[mid] <= b:
+                    lo = mid
+                else:
+                    hi = mid
+            f = (b - bs[lo]) / max(bs[hi] - bs[lo], 1e-30)
+            out.append(ts[lo] + f*(ts[hi] - ts[lo]))
+        return out
+    p_ = grid(prim, lambda j: pi*(j + 0.5)/N)
+    # beyond the table's last primary point the source is undeflected
+    s_ = grid(sec, lambda j: 0.0)
+    return p_, s_
+
+
 class Lensing(object):
     THRESHOLD = 2.5e-5      # 2 R_s / D: the Einstein radius is 0.3 degrees here
     TABLE_N = 256
@@ -282,7 +351,10 @@ class Lensing(object):
     RAIN = 1.001
     BODY_KMIN, BODY_KMAX = 0.05, 0.1   # R_s/D range over which the thin-lens bending of bodies fades out
     _table_tex = None
+    _inv_tex = None
+    _inv2_tex = None
     _table_key = None
+    _inv_rows = None       # the inverse table of the current hole (markers use it)
 
     # the lens in force for the frame being drawn, or None:
     # dict(body, D, Rs, R, h, is_hole, n, u, inv, cap)
@@ -354,14 +426,15 @@ class Lensing(object):
         c = cls.current
         if c is None or c["rain"] or Ds <= c["D"] + 1.5*c["R"]:
             return 0.0
-        # The thin lens (small deflection) is only good while the lens is
-        # weak as seen from the ship, R_s/D well below 1; close to a black
-        # hole it would throw the far side of its disc all over the sky.
-        # Bodies then keep their straight-line places (the sky alone is
-        # exact there), fading the bending out between R_s/D = 0.05 and 0.1.
+        w = (Ds - c["D"]) / Ds
+        if c["is_hole"]:
+            return w            # bent with the exact table, like the sky
+        # A star's thin lens (small deflection) is only good while the lens
+        # is weak as seen from the ship, R_s/D well below 1; the bending of
+        # bodies fades out between R_s/D = 0.05 and 0.1.
         k = c["Rs"] / c["D"]
         fade = max(0.0, min(1.0, (cls.BODY_KMAX - k) / (cls.BODY_KMAX - cls.BODY_KMIN)))
-        return (Ds - c["D"]) / Ds * fade
+        return w * fade
 
     @classmethod
     def apparent(cls, v, w):
@@ -391,7 +464,16 @@ class Lensing(object):
         beta = math.acos(cb)
         ex, ey, ez = dx - cb*hx, dy - cb*hy, dz - cb*hz
         el = (ex*ex + ey*ey + ez*ez) ** 0.5
-        if el >= 1e-6:
+        if el >= 1e-6 and c["is_hole"] and cls._inv_rows is not None:
+            ex, ey, ez = ex/el, ey/el, ez/el
+            tab = cls._inv_rows; N = len(tab)
+            x = beta/pi*N - 0.5
+            j = max(0, min(N - 2, int(x))); f = max(0.0, min(1.0, x - j))
+            thx = tab[j] + f*(tab[j + 1] - tab[j])
+            th = beta + (thx - beta)*w
+            ct, st = math.cos(th), math.sin(th)
+            dx, dy, dz = hx*ct + ex*st, hy*ct + ey*st, hz*ct + ez*st
+        elif el >= 1e-6:
             ex, ey, ez = ex/el, ey/el, ez/el
             def alpha(th):
                 st = max(math.sin(th), 1e-6)
@@ -414,6 +496,13 @@ class Lensing(object):
         vx, vy, vz = -(px + a*nx)/t, -(py + a*ny)/t, -(pz + a*nz)/t
         m = (vx*vx + vy*vy + vz*vz) ** 0.5
         return (vx/m, vy/m, vz/m)
+
+    @classmethod
+    def secondary(cls, w):
+        """Whether a body with bending fraction w gets its secondary image:
+        a black hole is the lens and the body is far beyond it."""
+        c = cls.current
+        return c is not None and c["is_hole"] and not c["rain"] and w > 0.5 and cls._inv_rows is not None
 
     @classmethod
     def bind_table(cls, unit=4):
@@ -440,11 +529,30 @@ class Lensing(object):
                 flat += [beta, shadow, freq, 1.0]
             glBindTexture(GL_TEXTURE_1D, cls._table_tex)
             glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, cls.TABLE_N, 0, GL_RGBA, GL_FLOAT, (GLfloat*len(flat))(*flat))
+            # the inverse, for the bodies' images: primary and secondary
+            inv, inv2 = inverse_rows(rows, cls.TABLE_N)
+            cls._inv_rows = inv
+            for attr, data in (("_inv_tex", inv), ("_inv2_tex", inv2)):
+                if getattr(cls, attr) is None:
+                    setattr(cls, attr, glGenTextures(1))
+                    glBindTexture(GL_TEXTURE_1D, getattr(cls, attr))
+                    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+                    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+                    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+                glBindTexture(GL_TEXTURE_1D, getattr(cls, attr))
+                flat = []
+                for th in data:
+                    flat += [th, 0.0, 0.0, 1.0]
+                glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, cls.TABLE_N, 0, GL_RGBA, GL_FLOAT, (GLfloat*len(flat))(*flat))
             cls._table_key = key
         if key[1] is None:
             return False
         glActiveTexture(GL_TEXTURE0 + unit)
         glBindTexture(GL_TEXTURE_1D, cls._table_tex)
+        glActiveTexture(GL_TEXTURE0 + unit + 1)
+        glBindTexture(GL_TEXTURE_1D, cls._inv_tex)
+        glActiveTexture(GL_TEXTURE0 + unit + 2)
+        glBindTexture(GL_TEXTURE_1D, cls._inv2_tex)
         glActiveTexture(GL_TEXTURE0)
         return True
 
@@ -458,6 +566,9 @@ class Lensing(object):
             # always: a sampler1D left on unit 0 beside the program's sampler2D
             # makes every draw fail with GL_INVALID_OPERATION (no sky at all)
             glUniform1i(glGetUniformLocation(program, "lens_table"), table_unit)
+            glUniform1i(glGetUniformLocation(program, "lens_tinv"), table_unit + 1)
+            glUniform1i(glGetUniformLocation(program, "lens_tinv2"), table_unit + 2)
+            glUniform1f(glGetUniformLocation(program, "lens_branch"), 0.0)
         if c is None or w <= 0.0:
             glUniform1f(glGetUniformLocation(program, "lens_k"), 0.0)
             if loc >= 0:
