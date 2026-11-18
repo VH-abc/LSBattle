@@ -13,7 +13,7 @@ radius.  Rings rotate at their Keplerian rate (inner ones faster) and the
 texture is a hot turbulent gas sheet whose slice follows each segment
 through the texture matrix.  Light bending is not modelled.
 """
-from math import pi, sin, cos, sqrt, acos
+from math import pi, sin, cos, sqrt, acos, atan2, radians
 
 from OpenGL.GL import *
 
@@ -41,16 +41,40 @@ def _pole_matrix(pole):
     return Matrix44.z_rotation(pi)
 
 
-def write_annulus(path, r0, r1, v0, v1, nr=8, na=96):
+def disc_azimuths(step=2.5, wedge=15.0, dmin=0.02, ratio=1.15):
+    """The mesh azimuths (radians, rising from 0 to 2 pi inclusive): `step`
+    degrees apart, but geometrically denser toward a = pi, down to `dmin`
+    degrees from it.  Lensed, the far half of the disc images onto a thin
+    arc over the hole, and the whole arc comes from the sources within a
+    degree or so of the azimuth straight behind the hole (there the side
+    the image lies on swings from one side through the top to the other);
+    the mesh is turned each frame so that a = pi faces away from the ship."""
+    az = set()
+    a = 0.0
+    while a < 360.0 - 0.5*step:
+        if abs(a - 180.0) >= wedge:
+            az.add(a)
+        a += step
+    d = dmin
+    while d < wedge:
+        az.add(180.0 - d); az.add(180.0 + d)
+        d *= ratio
+    az.add(180.0)
+    return [radians(a) for a in sorted(az)] + [2.0*pi]
+
+
+def write_annulus(path, r0, r1, v0, v1, nr=8, az=None):
     """Full annulus, radii r0..r1 (units of the Schwarzschild radius), in the
     plane y = 0; texcoords u = azimuth, v in [v0, v1]."""
+    if az is None:
+        az = disc_azimuths()
+    na = len(az) - 1
     lines = ["Game Polygon Object"]
     for j in range(nr + 1):
         r = r0 + (r1 - r0)*j/nr
         v = v0 + (v1 - v0)*j/nr
-        for i in range(na + 1):
-            a = 2.0*pi*i/na
-            lines.append("p %.6f 0.000000 %.6f %.6f %.6f" % (r*cos(a), r*sin(a), i/float(na), v))
+        for a in az:
+            lines.append("p %.6f 0.000000 %.6f %.6f %.6f" % (r*cos(a), r*sin(a), a/(2.0*pi), v))
     lines.append('m 1.0 1.0 1.0 1.0 "accretion.png"')
     idx = []
     for j in range(nr):
@@ -91,11 +115,27 @@ class AccretionDisk(object):
             omega = v / (rm*Rs)                   # rad/s: the texture pattern co-rotates
             self.rings.append((poly, rm, omega))
 
+    # the sense of Matrix44.y_rotation on the mesh's azimuth (x, z) = (cos a, sin a)
+    _v = Matrix44.y_rotation(0.3).get_rotate_v3(Vector3(1.0, 0.0, 0.0))
+    SPIN_SIGN = 1.0 if _v.z > 0.0 else -1.0
+
     def draw(self, Xp, L, LL, X, R, t, scale=1.0, gshift=1.0):
         """X, R: the hole's (possibly far-rescaled) centre and scale matrix."""
+        # the mesh is turned so its dense wedge (a = pi) faces away from the
+        # ship, and the gas pattern turned back through the texture matrix
+        # so that it still rotates at the Keplerian rate
+        d = Xp - X
+        dm = (R * self.M).get_inverse_rot().get_rotate_v3(Vector3(d.x, d.y, d.z))
+        a_obs = atan2(dm.z, dm.x)                 # the ship's azimuth in the mesh frame
         glDisable(GL_CULL_FACE)
+        glMatrixMode(GL_TEXTURE)
+        glPushMatrix()
         for poly, rm, omega in self.rings:
             phase = (omega*t) % (2.0*pi)
-            Rk = R * self.M * Matrix44.y_rotation(phase)
+            Rk = R * self.M * Matrix44.y_rotation(self.SPIN_SIGN * a_obs)
+            glLoadIdentity()
+            glTranslatef((a_obs - phase) / (2.0*pi), 0.0, 0.0)
             poly.draw(Xp, L, LL, X=X, R=Rk, scale=scale, gshift=gshift)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
         glEnable(GL_CULL_FACE)

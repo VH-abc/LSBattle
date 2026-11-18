@@ -50,6 +50,7 @@ uniform float lens_D;            // distance of the lens from the ship (ship-fra
 uniform sampler2D lens_ray;      // (theta, log rho) -> (sweep on the inbound leg, sweep on the outbound leg), -1: none
 uniform float lens_rs;           // the hole's Schwarzschild radius, same units
 uniform float lens_rhomax;       // the table's largest rho over R_s (log grid from R_s)
+uniform float lens_rhon;         // rows of the 2-D table (texel centres at (j + 0.5)/rows)
 uniform float lens_finite;       // 1: the 2-D table is bound
 // the sweep of the ray at view angle th when it reaches radius rho (0 < v < 1 along the log-rho grid)
 vec2 lens_sweep(float th, float v) {
@@ -97,6 +98,13 @@ vec3 lens_to_lab(vec3 v) {
     vec3 xyz = perp + (lens_inv*vpar + lens_u*tpv)*lens_n;
     float t = lens_inv + lens_u*tpv;
     return normalize(-xyz / t);
+}
+// the background-frame distance of a point the ship sees at unit distance in
+// direction v (the ship-frame null vector (-1, v) boosted; |xyz| = |t|)
+float lens_lab_dist(vec3 v) {
+    float c = dot(v, lens_n);
+    float tpv = (c > 0.0) ? 0.5*dot(v - lens_n, v - lens_n) : 1.0 - c;
+    return abs(lens_inv + lens_u*tpv);
 }
 // and back: a background-frame source direction as the ship sees it
 vec3 lens_to_ship(vec3 d) {
@@ -150,11 +158,26 @@ vec3 lens_apparent_near(vec3 p, float branch) {
     vec3 e = qh + cpsi * lens_h;                // the source's side, perpendicular to h
     float el = length(e);
     if (el < 1e-6) e = vec3(0.0); else e /= el;
-    float v = log(rho / lens_rs) / log(lens_rhomax);
+    float v = (log(rho / lens_rs) / log(lens_rhomax) * (lens_rhon - 1.0) + 0.5) / lens_rhon;
     float th = -1.0;
     if (branch < 0.5) {
         th = lens_solve(0, v, psi, false);
         if (th < 0.0) th = lens_solve(1, v, psi, false);
+        if (th < 0.0) {
+            // between the legs' stored domains: the texel or two at the
+            // tangent ray, where the sweep runs as the square root of the
+            // distance to it (inbound below, outbound above): a parabola in
+            // th through both ends rather than a jump
+            vec4 row = texture2D(lens_ray, vec2(0.5, v));
+            if (row.b > 0.0) {
+                vec2 sB = lens_sweep(row.b, v);
+                if (sB.r >= 0.0 && sB.g >= 0.0 && psi >= sB.r && psi <= sB.g) {
+                    float s = (2.0*psi - sB.r - sB.g) / max(sB.g - sB.r, 1e-6);
+                    float tt = row.b + 0.0245;              // the tangent ray, ~2 texels on
+                    th = tt - (tt - row.b) * s * s;
+                }
+            }
+        }
         if (th < 0.0) th = lens_solve(0, v, psi, true);
         if (th < 0.0) return vec3(0.0);
         return lens_h*cos(th) + e*sin(th);
@@ -644,7 +667,14 @@ class Lensing(object):
                 col = row(phi_in); ok = col >= 0.0
                 idx = np.where(ok)[0]
                 if idx.size and col[idx[-1]] < psi:
-                    t_ = th[idx[-1]]          # the edge of the inbound leg: the tangent ray
+                    # the gap at the tangent ray (as the shader: a parabola
+                    # between the inbound leg's end and the outbound leg's)
+                    i_ = idx[-1]; cout = row(phi_out)
+                    t_ = th[i_]
+                    if cout[i_] >= 0.0 and psi <= cout[i_]:
+                        s_ = (2.0*psi - col[i_] - cout[i_]) / max(cout[i_] - col[i_], 1e-6)
+                        tt = th[i_] + 2.0*np.pi/N
+                        t_ = tt - (tt - th[i_])*s_*s_
             if t_ is None:
                 return None
             ct, st = math.cos(t_), math.sin(t_)
@@ -788,6 +818,7 @@ class Lensing(object):
         glUniform1f(glGetUniformLocation(program, "lens_D"), c["D"])
         glUniform1f(glGetUniformLocation(program, "lens_rs"), c["Rs"])
         glUniform1f(glGetUniformLocation(program, "lens_rhomax"), RHO_MAX)
+        glUniform1f(glGetUniformLocation(program, "lens_rhon"), float(RHO_N))
         glUniform1f(glGetUniformLocation(program, "lens_finite"), 1.0 if (exact and cls._ray_rows is not None) else 0.0)
         if loc >= 0:
             glUniform1f(loc, w)

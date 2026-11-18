@@ -165,12 +165,16 @@ void main() {
         // over the hole, its near side and the hole itself stay put
         if (dist > 0.0) {
             vec3 dl = lens_to_lab(P / dist);
+            // the lens tables live in the background frame: the vertex's
+            // distance there, not the ship-frame one (they differ by the
+            // Doppler factor of the ship's motion)
+            float dlab = dist * lens_lab_dist(P / dist);
             vec3 img = vec3(0.0);
             if (lens_finite > 0.5 && lens_w > 0.0) {
                 // a source near the hole: its image from the real light path
                 // between its true position and the ship (primary, or the
                 // secondary round the far side on the second pass)
-                img = lens_apparent_near(dl * dist, lens_branch);
+                img = lens_apparent_near(dl * dlab, lens_branch);
             }
             if (dot(img, img) < 0.5) {
                 if (lens_branch > 0.5 && lens_finite > 0.5) {
@@ -179,7 +183,7 @@ void main() {
                     img = dl;
                 } else {
                     // beyond the near table: a far source, the 1-D tables
-                    float wv = lens_w * max(0.0, (dist - lens_D) / dist);
+                    float wv = lens_w * max(0.0, (dlab - lens_D) / dlab);
                     if (wv > 0.0) img = lens_apparent(dl, wv); else img = dl;
                 }
             }
