@@ -57,7 +57,9 @@ vec2 lens_sweep(float th, float v) {
 // view angle th of the image of a source at radius rho (log-grid coordinate v)
 // and sweep angle target, on leg 0 (inbound, sweep rising with th) or leg 1
 // (outbound, sweep falling with th); returns -1 when there is none
-float lens_solve(int leg, float v, float target) {
+// (edge: on the inbound leg, accept the end of its domain, the ray tangent
+// to the source's radius, when the target is not bracketed before it)
+float lens_solve(int leg, float v, float target, bool edge) {
     // coarse scan for the bracket
     float lo = -1.0, hi = -1.0, flo = 0.0, fhi = 0.0;
     float prev_th = -1.0, prev_f = -1.0;
@@ -67,6 +69,8 @@ float lens_solve(int leg, float v, float target) {
         float f = (leg == 0) ? sw.r : sw.g;
         if (f >= 0.0 && prev_f >= 0.0) {
             if ((prev_f - target) * (f - target) <= 0.0) { lo = prev_th; hi = th; flo = prev_f; fhi = f; break; }
+        } else if (edge && leg == 0 && prev_f >= 0.0 && f < 0.0 && prev_f < target) {
+            lo = prev_th; hi = th; flo = prev_f; fhi = target; break;
         }
         prev_th = th; prev_f = f;
     }
@@ -146,12 +150,13 @@ vec3 lens_apparent_near(vec3 p, float branch) {
     float v = log(rho / lens_rs) / log(lens_rhomax);
     float th = -1.0;
     if (branch < 0.5) {
-        th = lens_solve(0, v, psi);
-        if (th < 0.0) th = lens_solve(1, v, psi);
+        th = lens_solve(0, v, psi, false);
+        if (th < 0.0) th = lens_solve(1, v, psi, false);
+        if (th < 0.0) th = lens_solve(0, v, psi, true);
         if (th < 0.0) return vec3(0.0);
         return lens_h*cos(th) + e*sin(th);
     }
-    th = lens_solve(1, v, 6.28318530717959 - psi);
+    th = lens_solve(1, v, 6.28318530717959 - psi, false);
     if (th < 0.0) return vec3(0.0);
     return lens_h*cos(th) - e*sin(th);
 }
@@ -633,6 +638,11 @@ class Lensing(object):
             if t_ is None:
                 t_ = solve(row(phi_out), psi)
             if t_ is None:
+                col = row(phi_in); ok = col >= 0.0
+                idx = np.where(ok)[0]
+                if idx.size and col[idx[-1]] < psi:
+                    t_ = th[idx[-1]]          # the edge of the inbound leg: the tangent ray
+            if t_ is None:
                 return None
             ct, st = math.cos(t_), math.sin(t_)
             return (hx*ct + ex*st, hy*ct + ey*st, hz*ct + ez*st)
@@ -776,7 +786,7 @@ class Lensing(object):
 # between the observer and the source (primary image), and
 # sweep_out(theta, rho) = 2 pi - psi for the secondary image round the
 # far side.
-RHO_N = 64
+RHO_N = 128
 RHO_MAX = 80.0        # in Schwarzschild radii; farther sources use the 1-D tables
 
 
