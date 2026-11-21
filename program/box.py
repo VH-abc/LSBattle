@@ -490,7 +490,8 @@ class _Box(object):
     SYSTEMS = [("Solar system: Earth orbit", "earth", "Sun in 20 s"),
                ("Forge system: Cinder orbit", "cinder", "Cinder system"),
                ("Helios system: Ember orbit", "ember", "Helios system"),
-               ("Abyss system: Ash orbit", "ash", "Abyss system")]
+               ("Abyss system: Ash orbit", "ash", "Abyss system"),
+               ("Maelstrom (Kerr) system: Eddy orbit", "eddy", "Maelstrom system")]
 
     def preset_index(self, prefix):
         for i, (name, vals) in enumerate(self.presets()):

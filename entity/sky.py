@@ -84,6 +84,7 @@ class Sky(object):
         texture_name0 = search_imagefile(script.world.sky.texture0)
         self.texture_id0 = load_texture(texture_name0)
         self.texture_id_deep = load_texture(search_imagefile("deepsky.png"))
+        self.texture_id_disc = load_texture(search_imagefile("accretion.png"))
         self.tex_h = (float(load_texture(texture_name0, id_only=False).height),
                       float(load_texture(search_imagefile("deepsky.png"), id_only=False).height))
         # texture_name1 = search_imagefile(script.world.sky.texture1)
@@ -121,12 +122,19 @@ class Sky(object):
                 vec3 cl = planck_at(logT).rgb * cmb_scale;
                 outc = display(srgb_to_linear(outc) + cl * exposure);
             }
+            if (lens_kerr > 0.5) {
+                // the Kerr hole's disc, blended in by its share of the pixel;
+                // the rest of the pixel is sky by its share, else shadow
+                outc *= lens_wsky * (1.0 - lens_wdisc);
+                if (lens_wdisc > 0.0) outc += lens_wdisc * doppler_T(dcolor.rgb, ratio0 * lens_gdisc, exposure, disc_logT);
+            }
             gl_FragColor = vec4(outc, 1.0);
             """
             extra = blackbody.GLSL
         else:
             colour = GAME_COLOUR + """
             if (cmb_on > 0.5) gl_FragColor.rgb += cmb_game(cmb_T * ratio);
+            if (lens_kerr > 0.5) gl_FragColor.rgb = lens_wsky * (1.0 - lens_wdisc) * gl_FragColor.rgb + lens_wdisc * clamp(dcolor.rgb, 0.0, 1.0);
             """
             extra = CMB_GAME
         self.program = compile_program(vs, """
@@ -145,19 +153,52 @@ class Sky(object):
         uniform float cmb_T;    // its temperature (K)
         uniform vec2 tex_h;     // heights (texels) of the panorama and deep-sky maps
         uniform vec3 cmb_scale; // linear radiance scale: Sun-white at 5778 K
+        uniform sampler2D disc_tex;  // a Kerr hole's accretion disc (drawn here, from the ray table)
+        uniform float kd_rin, kd_rout;   // its edges (M)
+        uniform float kd_Tin, kd_bin;    // temperature and sRGB brightness at the inner edge
+        float disc_logT = 0.0;
         """ + boost.GLSL + LENS_GLSL + extra + """
+        vec3 doppler_T(vec3 srgb, float D, float expo, float logT0) {
+            // doppler_accurate with the source temperature known per pixel
+            vec3 lin = srgb_to_linear(srgb);
+            vec4 p0 = planck_at(logT0);
+            vec4 p1 = planck_at(logT0 + log(D)*0.4342944819);
+            return display(lin / max(p0.rgb, vec3(1e-6)) * p1.rgb * expo);
+        }
         void main() {
             vec3 d = normalize((view_i * vec4(pos, 0.0)).xyz);
             // photon direction in the background frame: Lorentz(-U) (d, -1)
             vec4 Xi = lz_neg(vec4(d, -1.0), tpv_null(d, 1.0, pb_n), pb_n, pb_u, pb_inv);
-            float ratio = -1.0 / Xi.w * g_obs;  // Doppler factor, observed/emitted, times the observer's gravitational blueshift
+            float ratio0 = -1.0 / Xi.w;         // Doppler factor of the ship's motion, observed/emitted
+            float ratio = ratio0 * g_obs;       // times the observer's gravitational blueshift
             // The background is a sphere of finite radius around the Sun, so the
             // texture direction depends on where the player is (parallax).
             vec3 dl0 = normalize(Xi.xyz);
+            vec4 dcolor = vec4(0.0);
             if (lens_k > 0.0) {
                 dl0 = lens_source(dl0);    // bent round the lens
-                if (dot(dl0, dl0) < 0.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }   // a black hole's shadow
-                if (lens_exact > 0.5) ratio *= lens_gs / g_obs;   // the table's own per-direction frequency factor
+                if (lens_kerr > 0.5) {
+                    if (lens_wsky <= 0.0 && lens_wdisc <= 0.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+                    ratio = ratio0 * lens_gs;     // the table's per-direction frequency factor (the observer's included)
+                    if (kd_rin > 0.0) {
+                        // the disc's edges a pixel wide, wherever they fall between texels
+                        float fw = max(fwidth(lens_disc_r), 1e-6);
+                        lens_wdisc = clamp((lens_disc_r - kd_rin) / fw + 0.5, 0.0, 1.0) * clamp((kd_rout - lens_disc_r) / fw + 0.5, 0.0, 1.0);
+                        lens_disc_r = clamp(lens_disc_r, kd_rin, kd_rout);
+                    }
+                    if (lens_wdisc > 0.0) {
+                        // the hole's disc: hot gas, T ~ r^-3/4 and brightness
+                        // ~ r^-3/2 from the inner edge, the pattern from the texture
+                        float rr = max(lens_disc_r / kd_rin, 1.0);
+                        disc_logT = log(kd_Tin * pow(rr, -0.75)) * 0.4342944819;
+                        float b = kd_bin * pow(rr, -1.5);
+                        float vv = log(rr) / log(kd_rout / kd_rin);
+                        dcolor = vec4(texture2D(disc_tex, vec2(lens_disc_u, vv)).rgb * b, 1.0);
+                    }
+                } else {
+                    if (dot(dl0, dl0) < 0.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }   // a black hole's shadow
+                    if (lens_exact > 0.5) ratio *= lens_gs / g_obs;   // the table's own per-direction frequency factor
+                }
             }
             vec3 dl = dl0;
             float pd = dot(sky_p, dl);
@@ -193,6 +234,7 @@ class Sky(object):
         self.gobs_local = glGetUniformLocation(self.program, "g_obs")
         self.skyw_local = glGetUniformLocation(self.program, "sky_w")
         self.texdeep_local = glGetUniformLocation(self.program, "texture_deep")
+        self.texdisc_local = glGetUniformLocation(self.program, "disc_tex")
         self.rot_local = glGetUniformLocation(self.program, "skyrot")
         self.tex0_local = glGetUniformLocation(self.program, "texture0")
         self.cmb_on_local = glGetUniformLocation(self.program, "cmb_on")
@@ -226,6 +268,9 @@ class Sky(object):
         glActiveTexture(GL_TEXTURE3)
         glBindTexture(GL_TEXTURE_2D, self.texture_id_deep)
         glUniform1i(self.texdeep_local, 3)
+        glActiveTexture(GL_TEXTURE10)          # 8 and 9 hold the Kerr tables
+        glBindTexture(GL_TEXTURE_2D, self.texture_id_disc)
+        glUniform1i(self.texdisc_local, 10)
         if player_rel is None:
             glUniform3f(self.skyp_local, 0.0, 0.0, 0.0)
         else:

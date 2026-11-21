@@ -588,6 +588,77 @@ World {
             star {
                 hp = 10000000000                # int 1<=x<=10000000000
                 model = star             # func_str
+                name = Maelstrom        # a 280,000-solar-mass black hole spinning at a/M = 0.95 (Kerr), made for preset 10
+                mass = 5.574e+35            # kg
+                kerr_spin = 0.95         # a/M: horizon at 1.31 M, prograde ISCO at 1.94 M (0.97 Schwarzschild radii)
+                orbital_phi = -60.0        # float -180<=x<=180
+                orbital_theta = -15.0        # float -90<=x<=90
+                orbital_radius = 2.839e19 # 3000 light-years
+                primary_star = Sun       # func_str
+                sphere_radius = 8.27782e+08  # Schwarzschild radius 2M, m
+                texture = black.png      # func_str
+                temperature = 100.0        # float 100.0<=x<=1000000000.0
+                brightness = 0.0        # nothing escapes
+                disk_inner = 1.0         # ignored: the disc starts at the innermost stable orbit of this spin
+                disk_outer = 4.0         # in Schwarzschild radii
+                disk_temperature = 20000.0
+                disk_brightness = 100.0      # sRGB units at the inner edge (1.94 M, deep in the well: its approaching side is boosted a further x5)
+                tilt = 180.0             # the spin along -y: the planets' orbits, about -y, are prograde
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Beacon              # hot dwarf star at 7 Schwarzschild radii of Maelstrom: period 320 s, 0.27c; lights the planets
+                mass = 6e+29              # kg
+                orbital_phi = 40.0        # float -180<=x<=180
+                orbital_theta = -6.0        # float -90<=x<=90
+                orbital_radius = 5.79447e+09 # m
+                primary_star = Maelstrom       # func_str
+                sphere_radius = 3e+07  # m
+                texture = star_blue.png      # func_str
+                temperature = 25000.0        # float 100.0<=x<=1000000000.0
+                brightness = 700.0        # roughly Planck(25000 K)/Planck(5778 K) x the Sun (132), in sRGB units
+                tilt = 0.0              # float -180<=x<=180
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Eddy             # Maelstrom planet at 4 Schwarzschild radii, period 204 s, 0.34c, just outside the disc
+                mass = 3e+23              # kg
+                lit_by = Beacon              # func_str
+                orbital_phi = 0.0        # float -180<=x<=180
+                orbital_theta = 10.0        # off the disc plane, so the disc is never seen exactly edge-on
+                orbital_radius = 3.31113e+09 # m
+                primary_star = Maelstrom       # func_str
+                sphere_radius = 3.5e+06  # m
+                texture = earth.png      # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 50.0
+                tilt = 20.0              # float -180<=x<=180
+                rotation_period = 3600.0
+            }
+            star {
+                hp = 1000                # int 1<=x<=10000000000
+                model = star             # func_str
+                name = Wake             # ringed giant at 12 Schwarzschild radii of Maelstrom, period 1030 s, 0.20c
+                mass = 2e+27              # kg
+                lit_by = Beacon              # func_str
+                orbital_phi = 150.0        # float -180<=x<=180
+                orbital_theta = 18.0        # float -90<=x<=90
+                orbital_radius = 9.93338e+09 # m
+                primary_star = Maelstrom       # func_str
+                sphere_radius = 7e+06  # m
+                texture = saturn.png      # func_str
+                ring = saturn_ring.png    # func_str
+                temperature = 5778.0        # float 100.0<=x<=1000000000.0
+                brightness = 1.0        # float 0.0<=x<=1000000.0
+                spin = 200.0
+                tilt = 30.0              # float -180<=x<=180
+            }
+            star {
+                hp = 10000000000                # int 1<=x<=10000000000
+                model = star             # func_str
                 name = BlackHole        # Gaia BH1, the nearest known stellar-mass black hole
                 mass = 1.91e31            # kg (9.6 solar masses)
                 orbital_phi = -150.0        # float -180<=x<=180

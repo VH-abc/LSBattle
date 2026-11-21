@@ -12,6 +12,7 @@ from entity import Bullets
 from model.pointsprite import PointSprite
 from model.lines import Lines
 from program.utils.lensing import Lensing
+from program.utils import kerr as kerrlib
 from program.box import BOX
 from program.utils import FlatScreen, fill_screen, DY_TEXTURE_EDGE
 from program.text import drawSentence
@@ -253,8 +254,12 @@ class Player(object):
                     if ut < 1e-30:
                         tx, ty, tz = (-nz, 0.0, nx) if abs(ny) < 0.9 else (0.0, nz, -ny)
                         ut = (tx*tx + ty*ty + tz*tz) ** 0.5
-                    vc = (body.GM / (r - 2.0*body.GM)) ** 0.5
-                    if vc < 1.0:
+                    sax = body.spin_axis
+                    # prograde: the orbit's angular momentum (r x t) along the spin
+                    pro = ((ny*tz - nz*ty)*sax[0] + (nz*tx - nx*tz)*sax[1] + (nx*ty - ny*tx)*sax[2]) >= 0.0
+                    vc = body.circular_speed(r, pro)
+                    if vc is not None:
+                        vc = abs(vc)
                         gc = 1.0 / (1.0 - vc*vc) ** 0.5
                         tb = Vector4D(gc, gc*vc*tx/ut, gc*vc*ty/ut, gc*vc*tz/ut)
                         bu = body.U
@@ -489,6 +494,77 @@ class Player(object):
         d2x, d2y, d2z = r2*n2x, r2*n2y, r2*n2z
         P.X.x = B.x + d2x; P.X.y = B.y + d2y; P.X.z = B.z + d2z
         lo[0] = d2x - (P.X.x - B.x); lo[1] = d2y - (P.X.y - B.y); lo[2] = d2z - (P.X.z - B.z)
+        return qw
+
+    def _kerr_step(self, body, acceleration, ds):
+        """One proper-time step of the exact Kerr geodesic around a spinning
+        hole, plus the ship's own thrust (program/utils/kerr.py).  The ship's
+        U is its velocity relative to the ZAMO at its position, its
+        components along the spherical unit vectors about the spin axis
+        being the tetrad components; the game's coordinates are read as
+        Boyer-Lindquist.  The horizon is the end: the state is held there."""
+        P = self.P; U = P.U; lo = self.Xlo
+        if acceleration.squared_length() > 0.0:
+            Xt = (P.X.t, P.X.x, P.X.y, P.X.z)
+            qw = P.transform(acceleration, ds)
+            P.X.t, P.X.x, P.X.y, P.X.z = Xt
+        else:
+            qw = (1.0, 0.0, 0.0, 0.0)
+        B = body.X
+        d = (P.X.x - B.x + lo[0], P.X.y - B.y + lo[1], P.X.z - B.z + lo[2])
+        sp = kerrlib.spherical(body.kerr_basis, d)
+        if sp is None:
+            return qw
+        r, th, ph, er, et, ep = sp
+        if abs(math.sin(th)) < 1.0e-3:
+            # over a pole the azimuthal equations are singular: the spin is
+            # ignored for this step (its effect there is a slight turning)
+            return self._geodesic_step(body, Vector4D(), ds)
+        M = body.GM; a = body.kerr_a
+        rmin = body.r_plus * (1.0 + 1.0e-4)
+        if r < rmin:
+            r = rmin
+        al, om, vp, S, D = kerrlib.zamo(M, a, r, th)
+        # tetrad momenta per unit mass = the components of U
+        prh = U.x*er[0] + U.y*er[1] + U.z*er[2]
+        pth = U.x*et[0] + U.y*et[1] + U.z*et[2]
+        pph = U.x*ep[0] + U.y*ep[1] + U.z*ep[2]
+        g = (1.0 + prh*prh + pth*pth + pph*pph) ** 0.5
+        E = al*g + om*vp*pph
+        L = vp*pph
+        pr = (S/D) ** 0.5 * prh
+        pt = S ** 0.5 * pth
+        r2, th2, ph2, pr2, pt2, dt = kerrlib.ship_step(M, a, r, th, ph, pr, pt, E, L, ds)
+        if not all(math.isfinite(v) for v in (r2, th2, ph2, pr2, pt2, dt)):
+            return qw
+        if r2 <= rmin:
+            # the horizon: the end, the state at this moment held
+            r2 = rmin
+            self.plunged = body
+        th2 = min(max(th2, 1.0e-4), pi - 1.0e-4)
+        al2, om2, vp2, S2, D2 = kerrlib.zamo(M, a, r2, th2)
+        prh2 = (D2/S2) ** 0.5 * pr2
+        pth2 = pt2 / S2 ** 0.5
+        pph2 = L / vp2
+        st, ct = math.sin(th2), math.cos(th2)
+        cp, sn = math.cos(ph2), math.sin(ph2)
+        e1, e2, sax = body.kerr_basis
+        def comb(a1, a2, a3):
+            return (a1*e1[0] + a2*e2[0] + a3*sax[0], a1*e1[1] + a2*e2[1] + a3*sax[1], a1*e1[2] + a2*e2[2] + a3*sax[2])
+        er2 = comb(st*cp, st*sn, ct); et2 = comb(ct*cp, ct*sn, -st); ep2 = comb(-sn, cp, 0.0)
+        U.x = prh2*er2[0] + pth2*et2[0] + pph2*ep2[0]
+        U.y = prh2*er2[1] + pth2*et2[1] + pph2*ep2[1]
+        U.z = prh2*er2[2] + pth2*et2[2] + pph2*ep2[2]
+        u2 = U.x*U.x + U.y*U.y + U.z*U.z
+        if u2 > 1.0e36:
+            k = 1.0e18 / u2 ** 0.5
+            U.x *= k; U.y *= k; U.z *= k; u2 = 1.0e36
+        U.t = (1.0 + u2) ** 0.5
+        P.X.t += dt
+        d2 = (r2*er2[0], r2*er2[1], r2*er2[2])
+        P.X.x = B.x + d2[0]; P.X.y = B.y + d2[1]; P.X.z = B.z + d2[2]
+        lo[0] = d2[0] - (P.X.x - B.x); lo[1] = d2[1] - (P.X.y - B.y); lo[2] = d2[2] - (P.X.z - B.z)
+        self.inside = None
         return qw
 
     def calc_repulsion(self, acceleration):
@@ -775,7 +851,9 @@ class Player(object):
             acceleration.normalize(30.0 / ds)
         X_prev = (self.P.X.t, self.P.X.x, self.P.X.y, self.P.X.z)
         U_prev = (self.P.U.t, self.P.U.x, self.P.U.y, self.P.U.z)
-        if strong is not None:
+        if strong is not None and getattr(strong, "is_kerr", False):
+            qw = self._kerr_step(strong, acceleration, ds)
+        elif strong is not None:
             qw = self._geodesic_step(strong, acceleration, ds)
         elif BOX.GRAVITY:
             qw, phi = self._weak_step(acceleration, ds, X_prev, U_prev)

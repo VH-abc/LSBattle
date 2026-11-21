@@ -115,6 +115,7 @@ uniform float light_on;  // 0: self-luminous, 1: sphere (Lambert), 2: thin disc 
 uniform float g_shift;   // gravitational redshift factor of the emitter (1 = none)
 uniform float disc_Rs;   // >0: accretion disc; mesh units per Schwarzschild radius
 uniform float disc_spin; // +1 / -1: sense of rotation about the mesh +y axis
+uniform float tex_shift; // added to the texture u coordinate (a disc's gas pattern turning)
 uniform float lens_w;    // scale of the bending (1: a black hole's exact table; 0: none)
 """ + boost.GLSL + LENS_GLSL + """
 varying float ratio;
@@ -275,7 +276,7 @@ class Polygon(MqoGpoPolygon):
     def load_program_tex(self):
         self.program_tex = compile_program(
             vs_T%("""
-                gl_TexCoord[0] = gl_TextureMatrix[0] * gl_MultiTexCoord0;
+                gl_TexCoord[0] = gl_MultiTexCoord0 + vec4(tex_shift, 0.0, 0.0, 0.0);
                 gl_FrontColor = vec4(1.0);
                 """),
             _fs()%("uniform sampler2D texture;\nuniform vec4 ucolor;",
@@ -289,6 +290,7 @@ class Polygon(MqoGpoPolygon):
         self.disc = None           # (mesh units per R_s, spin) for accretion discs
         self.t_disc_Rs = glGetUniformLocation(self.program_tex, "disc_Rs")
         self.t_disc_spin = glGetUniformLocation(self.program_tex, "disc_spin")
+        self.t_tex_shift = glGetUniformLocation(self.program_tex, "tex_shift")
         self.t_gshift = glGetUniformLocation(self.program_tex, "g_shift")
         self.t_light_dir = glGetUniformLocation(self.program_tex, "light_dir")
         self.t_light_on = glGetUniformLocation(self.program_tex, "light_on")
@@ -413,6 +415,7 @@ class Polygon(MqoGpoPolygon):
                     glUniform1i(self.tex_local, 0)
                     glUniform1f(self.t_gshift, self.grav_shift * gshift)
                     glUniform1f(self.t_disc_Rs, dRs); glUniform1f(self.t_disc_spin, dspin)
+                    glUniform1f(self.t_tex_shift, getattr(self, "tex_shift", 0.0))
                     glUniform3f(self.t_light_dir, lx, ly, lz)
                     glUniform1f(self.t_light_on, float(lmode))
                     if self.accurate:

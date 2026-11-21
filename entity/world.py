@@ -48,6 +48,7 @@ class World(object):
             self.start_in_orbit("earth", 2.0)
         self.glare = Glare()
         self.lensing = Lensing()
+        Lensing.kerr_init()
         self.enemies = Enemies(world=self)
         self.item = None
         self.worldline_ref = {}
@@ -159,6 +160,17 @@ class World(object):
         self.solar.hit_check(self.player.P.X)
         self.item_action(ds)
 
+    def frame_dragging(self, body):
+        """HUD text: the ZAMO's dragging speed omega varpi / alpha at the
+        ship, as a fraction of c, and the hole's spin."""
+        from program.utils import kerr as kerrlib
+        P = self.player.P; lo = self.player.Xlo
+        sp = kerrlib.spherical(body.kerr_basis, (P.X.x - body.X.x + lo[0], P.X.y - body.X.y + lo[1], P.X.z - body.X.z + lo[2]))
+        if sp is None or sp[0] <= body.r_plus:
+            return "spin a/M %.2f" % (body.kerr_a / body.GM)
+        al, om, vp, S, D = kerrlib.zamo(body.GM, body.kerr_a, sp[0], sp[1])
+        return "%.3fc here (spin a/M %.2f)" % (om*vp/al, body.kerr_a / body.GM)
+
     def spawn_factor(self, name):
         """Orbit radius for a start at body `name`, in body radii: 2 for a
         planet or star; 6 Schwarzschild radii for a black hole (twice the
@@ -211,7 +223,12 @@ class World(object):
         nx, ny, nz = ca*sx + sa*tx, ca*sy + sa*ty, ca*sz + sa*tz
         tx, ty, tz = sa*sx - ca*tx, sa*sy - ca*ty, sa*sz - ca*tz
         r = factor * body.collision_radius
-        vc = (body.GM / (r - 2.0*body.GM)) ** 0.5
+        sax = body.spin_axis
+        pro = ((ny*tz - nz*ty)*sax[0] + (nz*tx - nx*tz)*sax[1] + (nx*ty - ny*tx)*sax[2]) >= 0.0
+        vc = body.circular_speed(r, pro)
+        if vc is None:
+            vc = (body.GM / max(r - 2.0*body.GM, 1e-9*r)) ** 0.5
+        vc = abs(vc)
         P.X.x = body.X.x + nx*r; P.X.y = body.X.y + ny*r; P.X.z = body.X.z + nz*r
         ux = body.U.x + vc*tx; uy = body.U.y + vc*ty; uz = body.U.z + vc*tz
         P.U.x, P.U.y, P.U.z = ux, uy, uz
@@ -409,9 +426,12 @@ class World(object):
             def sources(k):
                 from model.polygon import Polygon
                 Polygon.secondary_ok = (k == 1.0)
-                if k == 1.0:
+                # the sky only in the first pass (it stays capped), except
+                # that a Kerr hole's disc is part of the sky: then every
+                # pass, so that the ladder resolves its true radiance
+                if k == 1.0 or (Lensing.current is not None and Lensing.current.get("kerr")):
                     glDisable(GL_DEPTH_TEST)
-                    self.sky.draw(*sky_args, scale=1.0/self.solar.GLARE_REF, gshift=fo)
+                    self.sky.draw(*sky_args, scale=k/self.solar.GLARE_REF, gshift=fo)
                     glEnable(GL_DEPTH_TEST)
                 self.solar.draw_glare(Xp, L, LL, scale=k)
             self.glare.apply(sources)

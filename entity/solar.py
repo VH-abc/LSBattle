@@ -1,11 +1,13 @@
 # coding: utf8
 # entity/solar.py
+import math
 from math import pi, sin, cos, acos
 
 from OpenGL.GL import *
 
 from go import Matrix44, Vector3, Vector4D, Lorentz, Quaternion, calc_repulsion
 from model.polygon import Polygon
+from program.utils import kerr as kerrlib
 from model.flame import Flame
 from entity.accretion import AccretionDisk
 from program.const import IMG_DIR, c, VIEW_ANGLE
@@ -121,6 +123,17 @@ class Star(object):
         # a body whose radius is its Schwarzschild radius: landing on it is
         # crossing the horizon
         self.is_hole = self.GM > 0.0 and 2.0*self.GM >= 0.999*self.radius
+        # a spinning hole: kerr_spin = a/M in the script; its ZAMO frame is
+        # what the ship's velocity is measured against there (program/utils/kerr.py)
+        spin_par = max(0.0, min(0.998, float(getattr(star_data, "kerr_spin", 0.0))))
+        self.is_kerr = self.is_hole and spin_par > 0.0
+        self.kerr_a = spin_par * self.GM if self.is_kerr else 0.0
+        self.r_plus = kerrlib.horizon(self.GM, self.kerr_a) if self.GM > 0.0 else 0.0
+        self.kerr_basis = kerrlib.axes(self.spin_axis)
+        if self.is_kerr and self.disk is not None:
+            # the disc starts at the innermost stable orbit of this spin and
+            # is drawn from the ray table (entity/sky.py), not as geometry
+            self.disk.inner = kerrlib.isco(self.GM, self.kerr_a) / (2.0*self.GM)
         # light from the surface climbs out of the body's own well
         self.self_shift = (max(0.0, 1.0 - 2.0*self.GM/self.radius)) ** 0.5 if self.radius > 0.0 and not self.is_hole else 1.0
         if self.is_hole:
@@ -167,6 +180,18 @@ class Star(object):
     LADDER_TOP = 0.9 * 65536  # encoded radiance the exposure ladder in the glare pass still resolves (~850,000x linear)
     MAX_ENLARGE = 1.0       # past the ladder the source simply clips: an enlarged source makes a halo with a rim
     LADDER_MARGIN = 16.0    # encoded-radiance allowance (~450x linear, a Doppler factor of 4.6) for a body's shifts varying across its image, when deciding whether a dim ladder pass can skip it
+
+    def circular_speed(self, r, prograde=True):
+        """Speed of the circular orbit at r relative to the local frame the
+        ship's U is measured in: the static observer's sqrt(GM/(r - R_s))
+        (exact for Schwarzschild), the ZAMO's for a Kerr hole.  None where
+        there is no such orbit."""
+        if self.is_kerr:
+            return kerrlib.circular_speed(self.GM, self.kerr_a, r, prograde)
+        if r <= 3.0*self.GM:
+            return None
+        v = (self.GM / (r - 2.0*self.GM)) ** 0.5
+        return v if v < 1.0 else None
 
     def draw_glare(self, Xp, L, LL, gshift=1.0, scale=1.0):
         """Draw this body as a glare source: its rendered radiance divided by
@@ -309,7 +334,7 @@ class Star(object):
                 self.model.is_lens = c is not None and c["body"] is self
                 self.model.draw(Xp, L, LL, X=X, U=U, R=Rg, scale=scale, gshift=gshift)
                 self.model.is_lens = False
-            if disc and self.disk is not None:      # an accretion disc glows: drawn in the glare pass too
+            if disc and self.disk is not None and not self.is_kerr:      # an accretion disc glows: drawn in the glare pass too
                 self.disk.draw(Xp, L, LL, X, R, Xp.t, scale=scale, gshift=gshift)
             if ring and self.ring is not None:
                 # translucent: drawn after the globe so it blends over it and
@@ -370,6 +395,10 @@ class SolarSystem(object):
                 n = (ey*ey + ez*ez) ** 0.5
             e = (ex/n*r, ey/n*r, ez/n*r)
             omega = (prim.GM / r**3) ** 0.5
+            if getattr(prim, "is_kerr", False):
+                # the prograde circular orbit of the Kerr metric (the
+                # scripted sense, about -y, is prograde for a spin along -y)
+                omega = kerrlib.omega_orbit(prim.GM, prim.kerr_a, r)
             star.orbit = (pname, p0, e, omega)
 
     def state_at(self, star, t, memo=None):
@@ -389,9 +418,20 @@ class SolarSystem(object):
             c, sn = cos(w*t), sin(w*t)
             X = Vector4D(t, Xp.x + p0[0]*c + e[0]*sn, Xp.y + p0[1]*c + e[1]*sn, Xp.z + p0[2]*c + e[2]*sn)
             gp = Up.t
-            vx = Up.x/gp + w*(-p0[0]*sn + e[0]*c)
-            vy = Up.y/gp + w*(-p0[1]*sn + e[1]*c)
-            vz = Up.z/gp + w*(-p0[2]*sn + e[2]*c)
+            kappa = 1.0
+            prim = self.stars[pname]
+            if getattr(prim, "is_kerr", False):
+                # about a Kerr hole the body's U is its velocity relative to
+                # the ZAMO there (as the ship's is): (Omega - omega) varpi/alpha
+                # against the coordinate Omega r sin(theta)
+                rr = (p0[0]*p0[0] + p0[1]*p0[1] + p0[2]*p0[2]) ** 0.5
+                sp = kerrlib.spherical(prim.kerr_basis, (p0[0]*c + e[0]*sn, p0[1]*c + e[1]*sn, p0[2]*c + e[2]*sn))
+                if sp is not None and rr > 0.0:
+                    al, om, vp, S_, D_ = kerrlib.zamo(prim.GM, prim.kerr_a, sp[0], sp[1])
+                    kappa = max(0.0, (w - om)) * vp / (al * w * rr * max(math.sin(sp[1]), 1e-9))
+            vx = Up.x/gp + kappa*w*(-p0[0]*sn + e[0]*c)
+            vy = Up.y/gp + kappa*w*(-p0[1]*sn + e[1]*c)
+            vz = Up.z/gp + kappa*w*(-p0[2]*sn + e[2]*c)
             v2 = vx*vx + vy*vy + vz*vz
             g = 1.0 / (1.0 - v2) ** 0.5 if v2 < 1.0 else 1.0e8
             res = (X, Vector4D(g, g*vx, g*vy, g*vz))
@@ -659,16 +699,31 @@ class SolarSystem(object):
             return
         body, D = lens
         Rs = 2.0 * body.GM
-        if D > Rs and not (body.is_hole and D < Lensing.RAIN*Rs):
+        kerr = getattr(body, "is_kerr", False)
+        def lapse(X):
+            # 1/sqrt(1 - R_s/r), or the ZAMO's 1/alpha about a Kerr hole
+            d = (X.x - body.X.x, X.y - body.X.y, X.z - body.X.z)
+            r = (d[0]*d[0] + d[1]*d[1] + d[2]*d[2]) ** 0.5
+            if kerr:
+                sp = kerrlib.spherical(body.kerr_basis, d)
+                if sp is None or sp[0] <= body.r_plus*1.0001:
+                    return None
+                return 1.0 / kerrlib.zamo(body.GM, body.kerr_a, sp[0], sp[1])[0]
+            if r <= Rs:
+                return None
+            return 1.0 / (1.0 - Rs/r) ** 0.5
+        if D > Rs and not (body.is_hole and not kerr and D < Lensing.RAIN*Rs):
             # (in the rain frame close to a hole the sky's shift comes from
             # its table per direction; the bodies get none)
-            self.obs_shift = 1.0 / (1.0 - Rs/D) ** 0.5
+            f = lapse(Xp)
+            if f is not None:
+                self.obs_shift = f
         for star in self.stars.values():
             if star is body:
                 continue
-            d = (star.X - body.X).length()
-            if d > Rs:
-                self.shifts[star.name] = (1.0 - Rs/d) ** 0.5
+            f = lapse(star.X)
+            if f is not None:
+                self.shifts[star.name] = 1.0 / f
 
     def draw(self, Xp, L, LL):
         fo = getattr(self, "obs_shift", 1.0)

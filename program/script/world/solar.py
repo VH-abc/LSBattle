@@ -27,6 +27,7 @@ class star(Block):
         self.lit_by = ""
         self.mass = 0.0
         self.disk_inner = 3.0
+        self.kerr_spin = 0.0      # a/M of a spinning (Kerr) black hole; 0: Schwarzschild
         self.disk_outer = 0.0
         self.disk_temperature = 10000.0
         self.disk_brightness = 100.0
@@ -53,7 +54,8 @@ class star(Block):
         self._ring_func = func_str
         self._lit_by_func = func_str
         self._mass_func = high_func_num(float, 0.0, 1.0e60)
-        self._disk_inner_func = high_func_num(float, 1.0, 1000.0)
+        self._disk_inner_func = high_func_num(float, 0.5, 1000.0)
+        self._kerr_spin_func = high_func_num(float, 0.0, 0.998)
         self._disk_outer_func = high_func_num(float, 0.0, 1000.0)
         self._disk_temperature_func = high_func_num(float, 100.0, 1.0e9)
         self._disk_brightness_func = high_func_num(float, 0.0, 1.0e6)

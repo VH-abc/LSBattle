@@ -296,6 +296,8 @@ class Play(object):
                 fo = getattr(self.world.solar, "obs_shift", 1.0)
                 if abs(fo - 1.0) > 1e-4:
                     text += "Gravitational blueshift: x%.4g\n" % fo
+                if ref is not None and getattr(ref, "is_kerr", False):
+                    text += "Frame dragging: %s\n" % self.world.frame_dragging(ref)
                 rl = getattr(self.world, "rate_limit", 1.0)
                 tr = BOX.time_rate()
                 if rl < 0.999:
@@ -305,7 +307,8 @@ class Play(object):
                 else:
                     text += "Time rate: x%g  ([ ])\n"%(BOX.TIME_RATE)
                 if self.world.player.plunged is not None:
-                    text += "At the singularity of %s: the end\n" % self.world.player.plunged.name
+                    pb = self.world.player.plunged
+                    text += ("At the horizon of %s: the end\n" if getattr(pb, "is_kerr", False) else "At the singularity of %s: the end\n") % pb.name
                 elif self.world.player.inside is not None:
                     text += "Inside the event horizon of %s\n" % self.world.player.inside.name
                 elif self.world.player.landed is not None:

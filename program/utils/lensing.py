@@ -27,6 +27,8 @@ Only done when 2 R_s / D exceeds a threshold, so nothing is spent on it in
 an ordinary planetary system.
 """
 from OpenGL.GL import *
+from program.utils import kerr as kerrlib
+from program.utils.kerr import GLSL as KERR_GLSL
 
 from program.utils import boost
 
@@ -43,6 +45,7 @@ uniform float lens_u, lens_inv;
 uniform float lens_exact;        // 1: a black hole; the sky map comes from the table below
 uniform sampler1D lens_table;    // view angle from the hole (0..pi) -> (source angle, shadow flag, frequency factor)
 float lens_gs = 1.0;             // set by lens_source: observed/emitted frequency of the sky in that direction (exact table only)
+""" + KERR_GLSL + """
 uniform sampler1D lens_tinv;     // source angle (0..pi) -> view angle of its primary image (the table inverted)
 uniform sampler1D lens_tinv2;    // source angle (0..pi) -> view angle of its secondary image (wrapped round the far side)
 uniform float lens_branch;       // 0: primary image; 1: secondary (a second pass over the body)
@@ -125,6 +128,7 @@ float lens_alpha(float th, float w) {
 // where a pixel's light came from: background-frame direction d -> source direction
 // (a zero vector means the shadow of a black hole)
 vec3 lens_source(vec3 d) {
+    if (lens_kerr > 0.5) return kerr_source(d);
     float ct = clamp(dot(d, lens_h), -1.0, 1.0);
     float th = acos(ct);
     vec3 e = d - ct*lens_h;
@@ -500,10 +504,26 @@ class Lensing(object):
             return
         bn, bu, bg, binv = boost.params(U)
         Rs = 2.0*body.GM
+        kerr = getattr(body, "is_kerr", False)
         cls.current = dict(body=body, D=D, Rs=Rs, R=body.radius, h=(dX.x/n, dX.y/n, dX.z/n),
                            is_hole=body.is_hole, n=bn, u=bu, inv=binv,
-                           cap=2.598 if body.is_hole else cls.capture(body.radius, Rs),
-                           rain=body.is_hole and D < cls.RAIN*Rs)
+                           cap=(body.r_plus/Rs if kerr else 2.598) if body.is_hole else cls.capture(body.radius, Rs),
+                           rain=body.is_hole and not kerr and D < cls.RAIN*Rs, kerr=kerr)
+        if kerr:
+            # the ZAMO's tetrad at the ship and the hole's frame (x toward
+            # the ship's azimuth, z the spin), all in the background frame
+            sp = kerrlib.spherical(body.kerr_basis, (-dX.x, -dX.y, -dX.z))
+            if sp is None:
+                cls.current = None
+                return
+            r, th, ph, er, et, ep = sp
+            e1, e2, sax = body.kerr_basis
+            cp, s_ = math.cos(ph), math.sin(ph)
+            bx = tuple(cp*e1[i] + s_*e2[i] for i in range(3))
+            by = tuple(-s_*e1[i] + cp*e2[i] for i in range(3))
+            M = body.GM
+            cls.current.update(kr=max(r, body.r_plus*1.002), kth=th, kph=ph, er=er, et=et, ep=ep,
+                               bx=bx, by=by, bz=sax, t=Xp.t, M=M, a=body.kerr_a)
 
     @classmethod
     def enlarge(cls, body):
@@ -512,6 +532,10 @@ class Lensing(object):
         c = cls.current
         if c is None or c["body"] is not body or c["R"] <= 0.0:
             return 1.0
+        if c["kerr"]:
+            # the shadow is painted by the ray table, and the disc's lensed
+            # images lie where a globe would be: no globe at all
+            return 1.0e-3
         f = max(1.0 - c["Rs"] / c["D"], 0.0) ** 0.5     # as seen from D, not from infinity
         e = c["cap"] * c["Rs"] * f / c["R"]
         if c["is_hole"]:
@@ -699,6 +723,40 @@ class Lensing(object):
         c = cls.current
         return c is not None and c["is_hole"] and not c["rain"] and wscale > 0.0 and cls._inv_rows is not None
 
+    _kerr_table = None
+
+    @classmethod
+    def kerr_init(cls):
+        """Create the Kerr sky table's GL objects (shader, texture,
+        framebuffer) now, outside any draw: made lazily inside the sky's
+        draw they leave that first frame without the disc."""
+        if cls._kerr_table is None:
+            cls._kerr_table = kerrlib.KerrTable()
+            cls._kerr_table._init_gl()
+            glUseProgram(0)
+
+    @classmethod
+    def _bind_kerr(cls, unit):
+        """Build the ZAMO's sky for the current Kerr lens (when the ship
+        moved) and bind it on texture unit `unit`."""
+        c = cls.current
+        if cls._kerr_table is None:
+            cls._kerr_table = kerrlib.KerrTable()
+        body = c["body"]; M = c["M"]
+        disc = None
+        if body.disk is not None:
+            r_in, r_out = body.disk.inner*c["Rs"]/M, body.disk.outer*c["Rs"]/M      # in M
+            # the gas pattern turns at the Keplerian rate of three rings; the
+            # phase is reduced in double precision here, the shader only adds
+            # the light-travel part
+            split = [r_in*(r_out/r_in) ** (k/3.0) for k in range(4)]
+            omegas = [kerrlib.omega_orbit(1.0, c["a"]/M, math.sqrt(split[k]*split[k+1])) for k in range(3)]
+            tM = c["t"] / M
+            phases = [math.fmod(om*tM, 2.0*math.pi) for om in omegas]
+            disc = (r_in, r_out, phases, omegas, (split[1], split[2]))
+        cls._kerr_table.build(c["a"]/M, c["kr"]/M, c["kth"], disc)
+        cls._kerr_table.bind(unit)
+
     @classmethod
     def bind_table(cls, unit=4):
         """For a black hole lens, build (when the distance changed by more
@@ -706,6 +764,8 @@ class Lensing(object):
         c = cls.current
         if c is None or not c["is_hole"]:
             return False
+        if c["kerr"]:
+            cls._bind_kerr(unit + 4)
         key = (c["body"].name, round(c["D"] / c["Rs"], 3) if c["D"] < 1e3*c["Rs"] else None, c["rain"])
         if key != cls._table_key or cls._table_tex is None:
             if cls._table_tex is None:
@@ -802,18 +862,42 @@ class Lensing(object):
             glUniform1i(glGetUniformLocation(program, "lens_ray"), table_unit + 3)
             glUniform1i(glGetUniformLocation(program, "lens_tinv2"), table_unit + 2)
             glUniform1i(glGetUniformLocation(program, "lens_ray"), table_unit + 3)
+            glUniform1i(glGetUniformLocation(program, "kerr_table"), table_unit + 4)
+            glUniform1i(glGetUniformLocation(program, "kerr_disc"), table_unit + 5)
             glUniform1f(glGetUniformLocation(program, "lens_branch"), 0.0)
+        kloc = glGetUniformLocation(program, "lens_kerr")
+        if kloc >= 0:
+            glUniform1f(kloc, 1.0 if (c is not None and c["kerr"] and table_unit is not None and cls._kerr_table is not None and cls._kerr_table.ok) else 0.0)
         if c is None or w <= 0.0:
             glUniform1f(glGetUniformLocation(program, "lens_k"), 0.0)
             if loc >= 0:
                 glUniform1f(loc, 0.0)
             return
+        if c["kerr"] and kloc >= 0 and table_unit is not None:
+            body = c["body"]
+            if body.disk is not None:
+                glUniform1f(glGetUniformLocation(program, "kerr_rin"), body.disk.inner*c["Rs"]/c["M"])
+                glUniform1f(glGetUniformLocation(program, "kerr_rout"), body.disk.outer*c["Rs"]/c["M"])
+            else:
+                glUniform1f(glGetUniformLocation(program, "kerr_rin"), 0.0)
+            for name in ("er", "et", "ep", "bx", "by", "bz"):
+                glUniform3f(glGetUniformLocation(program, "kerr_" + name), *c[name])
+            if body.disk is not None:
+                dloc = glGetUniformLocation(program, "kd_rin")
+                if dloc >= 0:
+                    glUniform1f(dloc, body.disk.inner*c["Rs"]/c["M"])
+                    glUniform1f(glGetUniformLocation(program, "kd_rout"), body.disk.outer*c["Rs"]/c["M"])
+                    glUniform1f(glGetUniformLocation(program, "kd_Tin"), body.disk.temperature)
+                    glUniform1f(glGetUniformLocation(program, "kd_bin"), body.disk.brightness)
         glUniform3f(glGetUniformLocation(program, "lens_h"), *c["h"])
         glUniform1f(glGetUniformLocation(program, "lens_k"), c["Rs"] / c["D"])
         glUniform3f(glGetUniformLocation(program, "lens_n"), *c["n"])
         glUniform1f(glGetUniformLocation(program, "lens_u"), c["u"])
         glUniform1f(glGetUniformLocation(program, "lens_inv"), c["inv"])
         exact = table_unit is not None and cls.bind_table(table_unit)
+        if c["kerr"] and kloc >= 0 and table_unit is not None:
+            # after the build: the row window the table was traced with
+            glUniform1f(glGetUniformLocation(program, "kerr_win"), cls._kerr_table.win)
         glUniform1f(glGetUniformLocation(program, "lens_exact"), 1.0 if exact else 0.0)
         glUniform1f(glGetUniformLocation(program, "lens_D"), c["D"])
         glUniform1f(glGetUniformLocation(program, "lens_rs"), c["Rs"])

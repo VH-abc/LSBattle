@@ -122,20 +122,15 @@ class AccretionDisk(object):
     def draw(self, Xp, L, LL, X, R, t, scale=1.0, gshift=1.0):
         """X, R: the hole's (possibly far-rescaled) centre and scale matrix."""
         # the mesh is turned so its dense wedge (a = pi) faces away from the
-        # ship, and the gas pattern turned back through the texture matrix
-        # so that it still rotates at the Keplerian rate
+        # ship, and the gas pattern turned back through the texture
+        # coordinate so that it still rotates at the Keplerian rate
         d = Xp - X
         dm = (R * self.M).get_inverse_rot().get_rotate_v3(Vector3(d.x, d.y, d.z))
         a_obs = atan2(dm.z, dm.x)                 # the ship's azimuth in the mesh frame
         glDisable(GL_CULL_FACE)
-        glMatrixMode(GL_TEXTURE)
-        glPushMatrix()
+        Rk = R * self.M * Matrix44.y_rotation(self.SPIN_SIGN * a_obs)
         for poly, rm, omega in self.rings:
             phase = (omega*t) % (2.0*pi)
-            Rk = R * self.M * Matrix44.y_rotation(self.SPIN_SIGN * a_obs)
-            glLoadIdentity()
-            glTranslatef((a_obs - phase) / (2.0*pi), 0.0, 0.0)
+            poly.tex_shift = (a_obs - phase) / (2.0*pi)
             poly.draw(Xp, L, LL, X=X, R=Rk, scale=scale, gshift=gshift)
-        glPopMatrix()
-        glMatrixMode(GL_MODELVIEW)
         glEnable(GL_CULL_FACE)
