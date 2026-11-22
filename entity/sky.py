@@ -133,7 +133,15 @@ class Sky(object):
             }
             gl_FragColor = vec4(outc, 1.0);
             """
-            extra = blackbody.GLSL
+            extra = blackbody.GLSL + """
+            vec3 doppler_T(vec3 srgb, float D, float expo, float logT0) {
+                // doppler_accurate with the source temperature known per pixel
+                vec3 lin = srgb_to_linear(srgb);
+                vec4 p0 = planck_at(logT0);
+                vec4 p1 = planck_at(logT0 + log(D)*0.4342944819);
+                return display(lin / max(p0.rgb, vec3(1e-6)) * p1.rgb * expo);
+            }
+            """
         else:
             colour = GAME_COLOUR + """
             if (cmb_on > 0.5) gl_FragColor.rgb += cmb_game(cmb_T * ratio);
@@ -185,13 +193,6 @@ class Sky(object):
             // through the disc's range (two shadow texels, one crossing the plane
             // far out before falling in, one never: a false line of disc between)
             return kerr_rin > 0.0 && rmax > 1.3 * rmin && rmin < kerr_rout && rmax > kerr_rin;
-        }
-        vec3 doppler_T(vec3 srgb, float D, float expo, float logT0) {
-            // doppler_accurate with the source temperature known per pixel
-            vec3 lin = srgb_to_linear(srgb);
-            vec4 p0 = planck_at(logT0);
-            vec4 p1 = planck_at(logT0 + log(D)*0.4342944819);
-            return display(lin / max(p0.rgb, vec3(1e-6)) * p1.rgb * expo);
         }
         void main() {
             gl_FragDepth = 1.0;

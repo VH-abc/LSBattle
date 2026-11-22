@@ -470,13 +470,13 @@ World {
             star {
                 hp = 10000000000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Abyss        # a 280,000-solar-mass black hole with planets on relativistic orbits, made for preset 6
-                mass = 5.574e+35            # kg
+                name = Abyss        # a 203,000-solar-mass black hole, GM/c^3 = 1 light-second exactly, with planets on relativistic orbits, made for preset 6
+                mass = 4.036978e+35         # kg: c^3/G, so M = 1 ls, Rs = 2 ls
                 orbital_phi = 150.0        # float -180<=x<=180
                 orbital_theta = 10.0        # float -90<=x<=90
                 orbital_radius = 2.366e19 # 2500 light-years
                 primary_star = Sun       # func_str
-                sphere_radius = 8.27782e+08  # Schwarzschild radius, m
+                sphere_radius = 5.99584916e+08  # Schwarzschild radius 2M = 2 light-seconds, m
                 texture = black.png      # func_str
                 temperature = 100.0        # float 100.0<=x<=1000000000.0
                 brightness = 0.0        # nothing escapes
@@ -489,12 +489,12 @@ World {
             star {
                 hp = 1000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Ash             # Abyss planet at 5.5 Schwarzschild radii, period 316 s, 0.30c
+                name = Ash             # Abyss planet at 5.5 Schwarzschild radii, period 229 s, 0.30c
                 mass = 2e+23              # kg
                 lit_by = Abyss              # func_str
                 orbital_phi = 0.0        # float -180<=x<=180
                 orbital_theta = 12.0        # off the disc plane, so the disc is never seen exactly edge-on
-                orbital_radius = 4.5528e+09 # m
+                orbital_radius = 3.297717e+09 # m: 11 ls
                 primary_star = Abyss       # func_str
                 sphere_radius = 3e+06  # m
                 texture = mars.png      # func_str
@@ -506,11 +506,11 @@ World {
             star {
                 hp = 1000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Tar             # Abyss planet at 11.0 Schwarzschild radii, period 895 s, 0.21c
+                name = Tar             # Abyss planet at 11.0 Schwarzschild radii, period 648 s, 0.21c
                 mass = 6e+23              # kg
                 lit_by = Abyss              # func_str
                 orbital_phi = 130.0        # float -180<=x<=180
-                orbital_radius = 9.1056e+09 # m
+                orbital_radius = 6.595434e+09 # m: 22 ls
                 primary_star = Abyss       # func_str
                 sphere_radius = 4.5e+06  # m
                 texture = venus.png      # func_str
@@ -522,11 +522,11 @@ World {
             star {
                 hp = 1000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Slag             # Abyss planet at 22.0 Schwarzschild radii, period 2532 s, 0.15c
+                name = Slag             # Abyss planet at 22.0 Schwarzschild radii, period 1834 s, 0.15c
                 mass = 8e+22              # kg
                 lit_by = Abyss              # func_str
                 orbital_phi = -100.0        # float -180<=x<=180
-                orbital_radius = 1.82112e+10 # m
+                orbital_radius = 1.319087e+10 # m: 44 ls
                 primary_star = Abyss       # func_str
                 sphere_radius = 2e+06  # m
                 texture = mars.png      # func_str
@@ -538,11 +538,11 @@ World {
             star {
                 hp = 10000000000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Pyre              # hot dwarf star at 7 Schwarzschild radii of Abyss: period 454 s, 0.27c; lights the planets
+                name = Pyre              # hot dwarf star at 7 Schwarzschild radii of Abyss: period 329 s, 0.27c; lights the planets
                 mass = 6e+29              # kg
                 orbital_phi = 60.0        # float -180<=x<=180
                 orbital_theta = -8.0        # float -90<=x<=90
-                orbital_radius = 5.79447e+09 # m
+                orbital_radius = 4.197094e+09 # m: 14 ls
                 primary_star = Abyss       # func_str
                 sphere_radius = 3e+07  # m
                 texture = star_blue.png      # func_str
@@ -553,12 +553,12 @@ World {
             star {
                 hp = 1000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Halo             # ringed giant at 8.5 Schwarzschild radii, period 608 s, 0.24c, on an inclined orbit
+                name = Halo             # ringed giant at 8.5 Schwarzschild radii, period 440 s, 0.24c, on an inclined orbit
                 mass = 2e+27              # kg
                 lit_by = Abyss              # func_str
                 orbital_phi = -20.0        # float -180<=x<=180
                 orbital_theta = 25.0        # float -90<=x<=90
-                orbital_radius = 7.03615e+09 # m
+                orbital_radius = 5.096472e+09 # m: 17 ls
                 primary_star = Abyss       # func_str
                 sphere_radius = 7e+06  # m
                 texture = saturn.png      # func_str
@@ -571,12 +571,12 @@ World {
             star {
                 hp = 1000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Shard             # rock just outside the accretion disc, 5 Schwarzschild radii: period 274 s, 0.32c
+                name = Shard             # rock just outside the accretion disc, 5 Schwarzschild radii: period 199 s, 0.32c
                 mass = 5e+22              # kg
                 lit_by = Abyss              # func_str
                 orbital_phi = -150.0        # float -180<=x<=180
                 orbital_theta = 30.0        # float -90<=x<=90
-                orbital_radius = 4.13891e+09 # m
+                orbital_radius = 2.997925e+09 # m: 10 ls
                 primary_star = Abyss       # func_str
                 sphere_radius = 1.2e+06  # m
                 texture = mars.png      # func_str
@@ -588,14 +588,14 @@ World {
             star {
                 hp = 10000000000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Maelstrom        # a 280,000-solar-mass black hole spinning at a/M = 0.95 (Kerr), made for preset 10
-                mass = 5.574e+35            # kg
+                name = Maelstrom        # a 203,000-solar-mass black hole, GM/c^3 = 1 light-second exactly, spinning at a/M = 0.95 (Kerr), made for preset 10
+                mass = 4.036978e+35         # kg: c^3/G, so M = 1 ls, Rs = 2 ls
                 kerr_spin = 0.95         # a/M: horizon at 1.31 M, prograde ISCO at 1.94 M (0.97 Schwarzschild radii)
                 orbital_phi = -60.0        # float -180<=x<=180
                 orbital_theta = -15.0        # float -90<=x<=90
                 orbital_radius = 2.839e19 # 3000 light-years
                 primary_star = Sun       # func_str
-                sphere_radius = 8.27782e+08  # Schwarzschild radius 2M, m
+                sphere_radius = 5.99584916e+08  # Schwarzschild radius 2M = 2 light-seconds, m
                 texture = black.png      # func_str
                 temperature = 100.0        # float 100.0<=x<=1000000000.0
                 brightness = 0.0        # nothing escapes
@@ -608,11 +608,11 @@ World {
             star {
                 hp = 10000000000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Beacon              # hot dwarf star at 7 Schwarzschild radii of Maelstrom: period 320 s, 0.27c; lights the planets
+                name = Beacon              # hot dwarf star at 7 Schwarzschild radii (14 M) of Maelstrom: period 335 s, 0.27c; lights the planets
                 mass = 6e+29              # kg
                 orbital_phi = 40.0        # float -180<=x<=180
                 orbital_theta = -6.0        # float -90<=x<=90
-                orbital_radius = 5.79447e+09 # m
+                orbital_radius = 4.197094e+09 # m: 14 ls
                 primary_star = Maelstrom       # func_str
                 sphere_radius = 3e+07  # m
                 texture = star_blue.png      # func_str
@@ -623,12 +623,12 @@ World {
             star {
                 hp = 1000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Eddy             # Maelstrom planet at 4 Schwarzschild radii, period 204 s, 0.34c, just outside the disc
+                name = Eddy             # Maelstrom planet at 4 Schwarzschild radii (8 M), period 148 s, 0.34c, just outside the disc
                 mass = 3e+23              # kg
                 lit_by = Beacon              # func_str
                 orbital_phi = 0.0        # float -180<=x<=180
                 orbital_theta = 10.0        # off the disc plane, so the disc is never seen exactly edge-on
-                orbital_radius = 3.31113e+09 # m
+                orbital_radius = 2.398340e+09 # m: 8 ls
                 primary_star = Maelstrom       # func_str
                 sphere_radius = 3.5e+06  # m
                 texture = earth.png      # func_str
@@ -641,12 +641,12 @@ World {
             star {
                 hp = 1000                # int 1<=x<=10000000000
                 model = star             # func_str
-                name = Wake             # ringed giant at 12 Schwarzschild radii of Maelstrom, period 1030 s, 0.20c
+                name = Wake             # ringed giant at 12 Schwarzschild radii (24 M) of Maelstrom, period 746 s, 0.20c
                 mass = 2e+27              # kg
                 lit_by = Beacon              # func_str
                 orbital_phi = 150.0        # float -180<=x<=180
                 orbital_theta = 18.0        # float -90<=x<=90
-                orbital_radius = 9.93338e+09 # m
+                orbital_radius = 7.195019e+09 # m: 24 ls
                 primary_star = Maelstrom       # func_str
                 sphere_radius = 7e+06  # m
                 texture = saturn.png      # func_str
