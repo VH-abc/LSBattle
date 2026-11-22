@@ -87,7 +87,10 @@ def chiptune(rate=RATE, bpm=150.0, bars=8, seed=7, root=9, mode="minor", style="
     """A loop in the key `root` (semitones from C) and `mode`, in a style:
     bright (square arpeggios over a triangle bass, a kick and a hat),
     driving (faster, syncopated bass, busier arpeggio), dark (slow drone,
-    sparse low arpeggio, no drums).  Returns float32 in [-1, 1]."""
+    sparse low arpeggio, no drums), whirl (a running arpeggio that spirals
+    up and down through two octaves under a slow swell, over a drone whose
+    pitch wobbles and a soft pulse on the beat: the dragged frame).
+    Returns float32 in [-1, 1]."""
     rng = np.random.RandomState(seed)
     beat = 60.0 / bpm
     bar = 4 * beat
@@ -108,10 +111,13 @@ def chiptune(rate=RATE, bpm=150.0, bars=8, seed=7, root=9, mode="minor", style="
         lead_amp, bass_amp, duty, lead_oct, drums, step = 0.2, 0.26, None, 0, False, 2
     elif style == "driving":
         lead_amp, bass_amp, duty, lead_oct, drums, step = 0.22, 0.3, 0.125, 0, True, 1
+    elif style == "whirl":
+        lead_amp, bass_amp, duty, lead_oct, drums, step = 0.2, 0.3, 0.25, 0, False, 1
     else:
         lead_amp, bass_amp, duty, lead_oct, drums, step = 0.22, 0.28, 0.25, 0, True, 1
     sixteenth = beat / 4.0
     pattern = [0, 1, 2, 1, 0, 2, 1, 2]
+    spiral = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1]      # chord tone k % 3, octave k // 3
     for b in range(bars):
         ch = chords[b % len(chords)]
         for s_ in range(0, 16, step):
@@ -119,15 +125,33 @@ def chiptune(rate=RATE, bpm=150.0, bars=8, seed=7, root=9, mode="minor", style="
             i1 = min(int((b * bar + (s_ + step) * sixteenth) * rate), total)
             if i1 <= i0:
                 continue
-            k = pattern[(s_ // step) % len(pattern)]
-            oct_ = (1 if (s_ // 8) % 2 else 0) + lead_oct
-            f = deg(ch[k], oct_)
+            if style == "whirl":
+                k = spiral[(b * 16 + s_) % len(spiral)]
+                f = deg(ch[k % 3], k // 3 + lead_oct)
+            else:
+                k = pattern[(s_ // step) % len(pattern)]
+                oct_ = (1 if (s_ // 8) % 2 else 0) + lead_oct
+                f = deg(ch[k], oct_)
             tt = t[i0:i1] - t[i0]
             env = np.exp(-tt * (3.0 if style == "dark" else 9.0)) * (1.0 - np.exp(-tt * 400.0))
             out[i0:i1] += lead_amp * (_tri(f * tt) if duty is None else _square(f * tt, duty)) * env
+    if style == "whirl":
+        # the swell: two bars round, so the loop closes on itself
+        out *= 0.65 + 0.35 * np.sin(2.0 * np.pi * t / (2.0 * bar))
     eighth = beat / 2.0
     for b in range(bars):
         root_f = deg(chords[b % len(chords)][0], -1)
+        if style == "whirl":
+            i0 = int(b * bar * rate); i1 = min(int((b + 1) * bar * rate), total)
+            tt = t[i0:i1] - t[i0]
+            wob = 0.25 * np.sin(2.0 * np.pi * tt / bar)        # one wobble a bar
+            out[i0:i1] += bass_amp * _tri(root_f * 0.5 * tt + wob) * (1.0 - np.exp(-tt * 6.0))
+            for q in range(4):
+                j0 = int((b * bar + q * beat) * rate); j1 = min(j0 + int(0.25 * rate), total)
+                tj = t[j0:j1] - t[j0]
+                fk = 36.0 + 60.0 * np.exp(-tj * 20.0)
+                out[j0:j1] += 0.45 * np.sin(2.0 * np.pi * np.cumsum(fk) / rate) * np.exp(-tj * 9.0)
+            continue
         if style == "dark":
             i0 = int(b * bar * rate); i1 = min(int((b + 1) * bar * rate), total)
             tt = t[i0:i1] - t[i0]
@@ -182,6 +206,10 @@ THEMES = {
     "pyre":        dict(root=1, mode="minor", bpm=170.0, style="driving", seed=32),
     "ash":         dict(root=6, mode="minor", bpm=90.0, style="calm", seed=33),
     "blackhole":   dict(root=11, mode="minor", bpm=80.0, style="dark", seed=13),
+    "maelstrom":   dict(root=1, mode="minor", bpm=132.0, style="whirl", seed=41),
+    "beacon":      dict(root=4, mode="major", bpm=156.0, style="bright", seed=42),
+    "eddy":        dict(root=9, mode="major", bpm=112.0, style="calm", seed=43),
+    "wake":        dict(root=2, mode="major", bpm=84.0, style="calm", seed=44),
 }
 FADE = 2.0        # seconds for a theme to fade in or out
 

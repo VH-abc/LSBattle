@@ -11,9 +11,12 @@ https://news.ycombinator.com/item?id=9247460
 
 Themes per body: the Sun's is the track above (A major); Earth, the Moon,
 Venus, Mars, Jupiter, Saturn, the neutron star, Sirius, Proxima,
-Betelgeuse, Helios, Forge, Cinder, Abyss, Pyre, Ash and the Gaia black
-hole have chiptune loops the game generates itself, in A, D or E major or
-F sharp, B or C sharp minor: keys sharing six or seven notes with it.
+Betelgeuse, Helios, Forge, Cinder, Abyss, Pyre, Ash, the Gaia black
+hole, Maelstrom, Beacon, Eddy and Wake have chiptune loops the game
+generates itself, in A, D or E major or F sharp, B or C sharp minor: keys
+sharing six or seven notes with it.  Maelstrom's spirals: a running
+arpeggio up and down two octaves under a slow swell, over a drone whose
+pitch wobbles once a bar, for the dragged frame.
 Other bodies play their primary's.  Each plays from its body, Doppler-shifted by the body's
 and the ship's motion and the gravitational shift, loud as light would be
 (inverse-square with distance, fourth power of the Doppler factor); the
