@@ -187,6 +187,9 @@ class Star(object):
         (exact for Schwarzschild), the ZAMO's for a Kerr hole.  None where
         there is no such orbit."""
         if self.is_kerr:
+            # only stable orbits: none inside the ISCO of that sense
+            if r < kerrlib.isco(self.GM, self.kerr_a if prograde else -self.kerr_a):
+                return None
             return kerrlib.circular_speed(self.GM, self.kerr_a, r, prograde)
         if r <= 3.0*self.GM:
             return None

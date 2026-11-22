@@ -238,13 +238,14 @@ class Player(object):
             # Brake towards the circular orbit around the nearest body at the
             # current radius, in the sense closest to the present motion:
             # static-frame orbital speed v = sqrt(GM/(r - R_s)) (exact for
-            # Schwarzschild; sqrt(GM/r) far out), no orbit inside r = 3GM.
+            # Schwarzschild; sqrt(GM/r) far out), no orbit inside r = 3GM;
+            # at a Kerr hole the ZAMO-relative speed, down to the ISCO.
             body = self.world.solar.dominant(self.P.X)
             if body is not None and body.GM > 0.0:
                 lo = self.Xlo
                 dx = self.P.X.x - body.X.x + lo[0]; dy = self.P.X.y - body.X.y + lo[1]; dz = self.P.X.z - body.X.z + lo[2]
                 r = (dx*dx + dy*dy + dz*dz) ** 0.5
-                if r > 3.0*body.GM:
+                if r > (body.r_plus if body.is_kerr else 3.0*body.GM):
                     nx, ny, nz = dx/r, dy/r, dz/r
                     # velocity relative to the body, in the body's frame
                     u = Lorentz(body.U).get_transform(self.P.U)

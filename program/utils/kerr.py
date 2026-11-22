@@ -43,11 +43,13 @@ def horizon(M, a):
 
 
 def isco(M, a):
-    """Innermost stable prograde circular orbit (Bardeen, Press, Teukolsky)."""
-    x = a / M
+    """Innermost stable circular orbit (Bardeen, Press, Teukolsky): prograde
+    for a > 0, retrograde for a < 0."""
+    x = abs(a) / M
     z1 = 1.0 + (1.0 - x*x) ** (1.0/3.0) * ((1.0 + x) ** (1.0/3.0) + (1.0 - x) ** (1.0/3.0))
     z2 = math.sqrt(3.0*x*x + z1*z1)
-    return M * (3.0 + z2 - math.sqrt((3.0 - z1) * (3.0 + z1 + 2.0*z2)))
+    root = math.sqrt((3.0 - z1) * (3.0 + z1 + 2.0*z2))
+    return M * (3.0 + z2 - (root if a >= 0.0 else -root))
 
 
 def omega_orbit(M, a, r):
