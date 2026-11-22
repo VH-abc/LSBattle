@@ -602,7 +602,7 @@ World {
                 disk_inner = 1.0         # ignored: the disc starts at the innermost stable orbit of this spin
                 disk_outer = 4.0         # in Schwarzschild radii
                 disk_temperature = 20000.0
-                disk_brightness = 300.0      # sRGB units at the inner edge, ~2.3 x the Sun's 132 (Planck(20000 K) would be 600, but this edge is at 1.94 M: its approaching side is boosted a further x5)
+                disk_brightness = 600.0      # sRGB units at the inner edge: Planck(20000 K) ~ 4.5 x the Sun's 132, as Abyss
                 tilt = 180.0             # the spin along -y: the planets' orbits, about -y, are prograde
             }
             star {
