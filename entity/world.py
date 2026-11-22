@@ -222,7 +222,7 @@ class World(object):
         sx, sy, sz = -nx, -ny, -nz
         nx, ny, nz = ca*sx + sa*tx, ca*sy + sa*ty, ca*sz + sa*tz
         tx, ty, tz = sa*sx - ca*tx, sa*sy - ca*ty, sa*sz - ca*tz
-        r = factor * body.collision_radius
+        r = factor * (2.0*body.GM if body.is_hole else body.collision_radius)
         sax = body.spin_axis
         pro = ((ny*tz - nz*ty)*sax[0] + (nz*tx - nx*tz)*sax[1] + (nx*ty - ny*tx)*sax[2]) >= 0.0
         vc = body.circular_speed(r, pro)

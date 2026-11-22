@@ -136,7 +136,10 @@ class Star(object):
             self.disk.inner = kerrlib.isco(self.GM, self.kerr_a) / (2.0*self.GM)
         # light from the surface climbs out of the body's own well
         self.self_shift = (max(0.0, 1.0 - 2.0*self.GM/self.radius)) ** 0.5 if self.radius > 0.0 and not self.is_hole else 1.0
-        if self.is_hole:
+        if self.is_kerr:
+            # the horizon, inside the scripted 2GM: orbits run between the two
+            self.collision_radius = self.r_plus * (1.0 + 1.0e-8)
+        elif self.is_hole:
             # the geodesic step stops just outside R_s: make sure that counts as contact
             # even when the scripted radius is rounded a little below 2GM
             self.collision_radius = max(self.collision_radius, 2.0*self.GM*(1.0 + 1.0e-8))
@@ -715,7 +718,7 @@ class SolarSystem(object):
             if r <= Rs:
                 return None
             return 1.0 / (1.0 - Rs/r) ** 0.5
-        if D > Rs and not (body.is_hole and not kerr and D < Lensing.RAIN*Rs):
+        if D > (body.r_plus*1.0001 if kerr else Rs) and not (body.is_hole and not kerr and D < Lensing.RAIN*Rs):
             # (in the rain frame close to a hole the sky's shift comes from
             # its table per direction; the bodies get none)
             f = lapse(Xp)

@@ -92,6 +92,53 @@ def circular_speed(M, a, r, prograde=True):
     return v
 
 
+def spherical_speed(M, a, r, th, dph):
+    """Speed, relative to the ZAMO at (r, th), of the constant-r orbit
+    through that point whose tangential direction has the tetrad
+    phi-component dph (|dph| <= 1, the rest along theta^): the circular
+    orbit on the equator, a spherical orbit off it.  With no radial
+    momentum the radial force depends only on E and L (ship_step's dGr),
+    so the speed is the root of that force in v, found by bisection; the
+    polar motion (the Carter constant) does not enter.  None where there
+    is no such orbit or it is unstable."""
+    al, om, vp, S, D = zamo(M, a, r, th)
+    a2 = a*a
+    def EL(v):
+        g = 1.0 / math.sqrt(1.0 - v*v)
+        pph = g*v*dph
+        return al*g + om*vp*pph, vp*pph
+    def force(rr, E, L):
+        # ship_step's dRD - 2r at pr = 0: the sign of dp_r/dtau
+        Dr = rr*rr - 2.0*M*rr + a2
+        if Dr <= 0.0:
+            return 0.0
+        P = (rr*rr + a2)*E - a*L
+        return (4.0*rr*E*P*Dr - P*P*(2.0*rr - 2.0*M)) / (Dr*Dr) - 2.0*rr
+    def f(v):
+        E, L = EL(v)
+        return force(r, E, L)
+    n = 400
+    v0, f0 = 0.0, f(0.0)
+    for i in range(1, n):
+        v1 = 0.9999 * i / (n - 1)
+        f1 = f(v1)
+        if f0 == 0.0 or f0 * f1 < 0.0:
+            lo, hi = v0, v1
+            for _ in range(60):
+                mid = 0.5*(lo + hi)
+                if f(lo) * f(mid) <= 0.0:
+                    hi = mid
+                else:
+                    lo = mid
+            v = 0.5*(lo + hi)
+            E, L = EL(v)
+            h = 1.0e-4 * r
+            stable = force(r + h, E, L) < force(r - h, E, L)
+            return v if stable else None
+        v0, f0 = v1, f1
+    return None
+
+
 def axes(spin):
     """(e1, e2, s): an orthonormal basis with the spin axis last, so that
     (r, th, ph) are Boyer-Lindquist angles about the spin."""

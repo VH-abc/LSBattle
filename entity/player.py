@@ -239,7 +239,8 @@ class Player(object):
             # current radius, in the sense closest to the present motion:
             # static-frame orbital speed v = sqrt(GM/(r - R_s)) (exact for
             # Schwarzschild; sqrt(GM/r) far out), no orbit inside r = 3GM;
-            # at a Kerr hole the ZAMO-relative speed, down to the ISCO.
+            # at a Kerr hole the ZAMO-relative speed of the constant-r orbit
+            # through here (spherical off the equator), down to its ISCO.
             body = self.world.solar.dominant(self.P.X)
             if body is not None and body.GM > 0.0:
                 lo = self.Xlo
@@ -255,10 +256,29 @@ class Player(object):
                     if ut < 1e-30:
                         tx, ty, tz = (-nz, 0.0, nx) if abs(ny) < 0.9 else (0.0, nz, -ny)
                         ut = (tx*tx + ty*ty + tz*tz) ** 0.5
-                    sax = body.spin_axis
-                    # prograde: the orbit's angular momentum (r x t) along the spin
-                    pro = ((ny*tz - nz*ty)*sax[0] + (nz*tx - nx*tz)*sax[1] + (nx*ty - ny*tx)*sax[2]) >= 0.0
-                    vc = body.circular_speed(r, pro)
+                    tx, ty, tz = tx/ut, ty/ut, tz/ut; ut = 1.0
+                    if body.is_kerr:
+                        # the constant-r orbit through here in the direction t:
+                        # circular on the equator, spherical off it; when there
+                        # is none (or no stable one) that way round, the other
+                        sp = kerrlib.spherical(body.kerr_basis, (dx, dy, dz))
+                        _, th, _, _, _, ep = sp
+                        dph = tx*ep[0] + ty*ep[1] + tz*ep[2]
+                        vc = kerrlib.spherical_speed(body.GM, body.kerr_a, r, th, dph)
+                        if vc is None and dph != 0.0:
+                            vc = kerrlib.spherical_speed(body.GM, body.kerr_a, r, th, -dph)
+                            if vc is not None:
+                                tx, ty, tz = -tx, -ty, -tz
+                        if vc is None and abs(dph) < 1.0:
+                            # nor that: the prograde orbit (the one that reaches lowest)
+                            vc = kerrlib.spherical_speed(body.GM, body.kerr_a, r, th, 1.0)
+                            if vc is not None:
+                                tx, ty, tz = ep
+                    else:
+                        sax = body.spin_axis
+                        # prograde: the orbit's angular momentum (r x t) along the spin
+                        pro = ((ny*tz - nz*ty)*sax[0] + (nz*tx - nx*tz)*sax[1] + (nx*ty - ny*tx)*sax[2]) >= 0.0
+                        vc = body.circular_speed(r, pro)
                     if vc is not None:
                         vc = abs(vc)
                         gc = 1.0 / (1.0 - vc*vc) ** 0.5
