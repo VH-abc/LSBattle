@@ -214,32 +214,33 @@ void main() {
 }
 """
 
-BUILD_FS = """
-#version 120
+# The tracer: shared by the table build and by the sky shader, which runs
+# it for the pixels the table cannot resolve (the band along the shadow's
+# edge and the disc's edges, where neighbouring texels disagree).
+TRACE_GLSL = """
 uniform float ka;          // a/M
 uniform float kr;          // observer r/M
 uniform float kth;         // observer theta
-uniform vec2 ksize;        // table size (texels)
 uniform float krfar;
 uniform float kd_in;       // disc inner edge (M), 0: no disc
 uniform float kd_out;      // outer edge (M)
 uniform vec3 kd_phase;     // gas pattern phase of the three rings at the observer's time
 uniform vec3 kd_omega;     // their pattern angular velocities (per M of time)
 uniform vec2 kd_split;     // ring boundaries (M)
-
-""" + MAP_GLSL + """
 float Omega(float r) { return 1.0 / (pow(r, 1.5) + ka); }
 float ut_gas(float r) {
     float d = pow(r, 1.5) - 3.0*sqrt(r) + 2.0*ka;
     return (pow(r, 1.5) + ka) / (pow(r, 0.75) * sqrt(max(d, 1e-6)));
 }
-
-void main() {
-    // the view direction of this texel in the ZAMO's tetrad (r^, th^, ph^)
-    vec2 uv = gl_FragCoord.xy / ksize;
-    float psi = 6.28318530717959 * uv.x - 3.14159265358979;
-    float vth = kerr_vth(uv.y);
-    vec3 d = vec3(cos(vth), sin(vth)*cos(psi), sin(vth)*sin(psi));
+// The photon arriving along d (the ZAMO's tetrad: r^, th^, ph^), traced
+// backward.  Returns 1 for a ray from the sky, 0 for one from the horizon;
+// dir: where the sky ray came from (hole frame: x the observer's azimuth,
+// z the spin), invE: 1/E, its frequency factor; q: the ray's crossing of
+// the equatorial plane as the table stores it (radius in M, the gas
+// pattern's cos and sin, the frequency factor against the gas); hit: the
+// crossing point relative to the observer (hole frame, M), or the hole's
+// centre when the ray never crossed the plane.
+int kerr_trace(vec3 d, out vec3 dir, out float invE, out vec4 q, out vec3 hit) {
     // the ZAMO at the observer
     float a = ka, a2 = ka*ka;
     float r = kr, th = kth;
@@ -250,6 +251,7 @@ void main() {
     float om = 2.0*a*r/A;
     float al = sqrt(D*S/A);
     float vp = sqrt(A/S)*s;
+    vec3 obs = vec3(r*s, 0.0, r*c);
     // the photon that arrives along d moves along -d; unit energy in the ZAMO frame
     float prh = -d.x, pth_ = -d.y, pph = -d.z;
     float E = al + om*vp*pph;
@@ -321,6 +323,7 @@ void main() {
         if (r < rstop) { state = 2; break; }
         if (r > krfar) { state = 1; break; }
     }
+    dir = vec3(0.0); invE = 0.0;
     if (state == 1) {
         // the direction the light came from: minus its momentum direction,
         // read in the flat frame at the far point, as a vector in the hole's
@@ -336,13 +339,13 @@ void main() {
         vec3 er = vec3(s_*cp, s_*sp, c_);
         vec3 et = vec3(c_*cp, c_*sp, -s_);
         vec3 ep = vec3(-sp, cp, 0.0);
-        vec3 dir = m.x*er + m.y*et + m.z*ep;
-        gl_FragData[0] = vec4(dir, 1.0/E);
+        dir = m.x*er + m.y*et + m.z*ep;
+        invE = 1.0/E;
         if (hit_r < 0.0) hit_r = 1.0e4;          // never through the plane: beyond the disc
     } else {
-        gl_FragData[0] = vec4(0.0, 0.0, 0.0, 0.0);   // the shadow (or a ray run out of steps)
         if (hit_r < 0.0) hit_r = 0.0;            // never through the plane: inside the disc's edge
     }
+    hit = -obs;
     if (hit_r > 0.0 && hit_r < 1.0e3) {
         int ring = (hit_r < kd_split.x) ? 0 : ((hit_r < kd_split.y) ? 1 : 2);
         float phase = (ring == 0) ? kd_phase.x : ((ring == 1) ? kd_phase.y : kd_phase.z);
@@ -352,12 +355,32 @@ void main() {
         // formula runs away, and the value only serves the edge's blend
         float rg = clamp(hit_r, kd_in, kd_out);
         float g = 1.0 / (ut_gas(rg) * max(E - Omega(rg)*L, 1e-3));
-        gl_FragData[1] = vec4(hit_r, cos(pat), sin(pat), clamp(g, 0.01, 4.0));
+        q = vec4(hit_r, cos(pat), sin(pat), clamp(g, 0.01, 4.0));
+        hit = vec3(hit_r*cos(hit_ph), hit_r*sin(hit_ph), 0.0) - obs;
     } else {
-        gl_FragData[1] = vec4(hit_r, 1.0, 0.0, 1.0);
+        q = vec4(hit_r, 1.0, 0.0, 1.0);
     }
+    return state == 1 ? 1 : 0;
 }
 """ % MAX_STEPS
+
+BUILD_FS = """
+#version 120
+uniform vec2 ksize;        // table size (texels)
+""" + MAP_GLSL + TRACE_GLSL + """
+void main() {
+    // the view direction of this texel in the ZAMO's tetrad (r^, th^, ph^)
+    vec2 uv = gl_FragCoord.xy / ksize;
+    float psi = 6.28318530717959 * uv.x - 3.14159265358979;
+    float vth = kerr_vth(uv.y);
+    vec3 d = vec3(cos(vth), sin(vth)*cos(psi), sin(vth)*sin(psi));
+    vec3 dir, hit; float invE; vec4 q;
+    kerr_trace(d, dir, invE, q, hit);
+    gl_FragData[0] = vec4(dir, invE);     // zero in the shadow
+    gl_FragData[1] = q;
+    gl_FragData[2] = vec4(hit, 0.0);
+}
+"""
 
 
 class KerrTable(object):
@@ -367,6 +390,8 @@ class KerrTable(object):
         self.program = None
         self.tex = None
         self.tex_disc = None
+        self.tex_hit = None
+        self.params = None
         self.fbo = None
         self.api = None
         self.key = None
@@ -381,8 +406,8 @@ class KerrTable(object):
             return
         self.program = compile_program(BUILD_VS, BUILD_FS)
         bound = int(glGetIntegerv(GL_TEXTURE_BINDING_2D))
-        self.tex, self.tex_disc = [int(t) for t in glGenTextures(2)]
-        for tex in (self.tex, self.tex_disc):
+        self.tex, self.tex_disc, self.tex_hit = [int(t) for t in glGenTextures(3)]
+        for tex in (self.tex, self.tex_disc, self.tex_hit):
             glBindTexture(GL_TEXTURE_2D, tex)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
@@ -419,7 +444,8 @@ class KerrTable(object):
         bind(FB, self.fbo)
         attach(FB, ATT0, GL_TEXTURE_2D, self.tex, 0)
         attach(FB, ATT0 + 1, GL_TEXTURE_2D, self.tex_disc, 0)
-        glDrawBuffers(2, (GLenum * 2)(ATT0, ATT0 + 1))
+        attach(FB, ATT0 + 2, GL_TEXTURE_2D, self.tex_hit, 0)
+        glDrawBuffers(3, (GLenum * 3)(ATT0, ATT0 + 1, ATT0 + 2))
         if status(FB) != COMPLETE:
             bind(FB, 0)
             self.ok = False
@@ -440,6 +466,7 @@ class KerrTable(object):
         self.win = win
         glUniform2f(u("ksize"), float(TABLE_W), float(TABLE_H))
         glUniform1f(u("krfar"), max(R_FAR, 20.0*r_M))
+        self.params = dict(ka=a_over_M, kr=r_M, kth=th, krfar=max(R_FAR, 20.0*r_M), disc=disc)
         if disc is None:
             glUniform1f(u("kd_in"), 0.0); glUniform1f(u("kd_out"), 0.0)
             glUniform3f(u("kd_phase"), 0.0, 0.0, 0.0); glUniform3f(u("kd_omega"), 0.0, 0.0, 0.0)
@@ -466,12 +493,33 @@ class KerrTable(object):
         return True
 
     def bind(self, unit):
-        """The sky table on `unit`, the disc table on the next."""
-        glActiveTexture(GL_TEXTURE0 + unit)
-        glBindTexture(GL_TEXTURE_2D, self.tex if self.tex is not None else 0)
-        glActiveTexture(GL_TEXTURE0 + unit + 1)
-        glBindTexture(GL_TEXTURE_2D, self.tex_disc if self.tex is not None else 0)
+        """The sky table on `unit`, the disc table and the crossing points on the next two."""
+        for k, tex in enumerate((self.tex, self.tex_disc, self.tex_hit)):
+            glActiveTexture(GL_TEXTURE0 + unit + k)
+            glBindTexture(GL_TEXTURE_2D, tex if self.tex is not None else 0)
         glActiveTexture(GL_TEXTURE0)
+
+    def set_trace_uniforms(self, program):
+        """The tracer's uniforms (TRACE_GLSL) on a program that includes it,
+        as the last build set them."""
+        if self.params is None:
+            return
+        u = lambda n: glGetUniformLocation(program, n)
+        if u("ka") < 0:
+            return
+        pr = self.params
+        glUniform1f(u("ka"), pr["ka"]); glUniform1f(u("kr"), pr["kr"]); glUniform1f(u("kth"), pr["kth"])
+        glUniform1f(u("krfar"), pr["krfar"])
+        disc = pr["disc"]
+        if disc is None:
+            glUniform1f(u("kd_in"), 0.0); glUniform1f(u("kd_out"), 0.0)
+            glUniform3f(u("kd_phase"), 0.0, 0.0, 0.0); glUniform3f(u("kd_omega"), 0.0, 0.0, 0.0)
+            glUniform2f(u("kd_split"), 0.0, 0.0)
+        else:
+            r_in, r_out, phases, omegas, split = disc
+            glUniform1f(u("kd_in"), r_in); glUniform1f(u("kd_out"), r_out)
+            glUniform3f(u("kd_phase"), *phases); glUniform3f(u("kd_omega"), *omegas)
+            glUniform2f(u("kd_split"), *split)
 
 
 # the lookup, included in Lensing's GLSL
@@ -479,6 +527,9 @@ GLSL = """
 uniform float lens_kerr;        // 1: the lens is a Kerr hole: the sky from kerr_table
 uniform sampler2D kerr_table;   // sky direction (hole frame; zero in the shadow), frequency factor
 uniform sampler2D kerr_disc;    // the ray's crossing of the equatorial plane: radius (M), gas pattern cos/sin, frequency factor
+uniform sampler2D kerr_hit;     // the crossing point relative to the observer (hole frame, M); the hole's centre when none
+uniform vec2 kerr_size;         // the tables' size (texels)
+uniform float kerr_M;           // the hole's M in light-seconds
 uniform float kerr_rin, kerr_rout;        // the disc's edges (M); 0: no disc
 uniform vec3 kerr_er, kerr_et, kerr_ep;   // the ZAMO's tetrad directions, background frame
 uniform vec3 kerr_bx, kerr_by, kerr_bz;   // the hole's frame (x: observer's azimuth, z: spin), background frame
@@ -488,6 +539,9 @@ float lens_wdisc = 0.0;         // ...and how much is disc (opaque, over both)
 float lens_gdisc = 1.0;         // disc: observed/emitted frequency against the orbiting gas
 float lens_disc_r = 0.0;        // disc: radius in M
 float lens_disc_u = 0.0;        // ...and the gas pattern's azimuth / 2 pi
+vec3 lens_hit = vec3(0.0);      // the crossing point (or the hole) relative to the observer, hole frame, M
+vec3 lens_dtet = vec3(1.0, 0.0, 0.0);   // the view direction in the ZAMO's tetrad (r^, th^, ph^)
+vec2 lens_uv = vec2(0.0);       // its table coordinates
 // the sky direction (background frame) of the ZAMO's view direction d
 vec3 kerr_source(vec3 d) {
     float dr = clamp(dot(d, kerr_er), -1.0, 1.0);
@@ -497,6 +551,7 @@ vec3 kerr_source(vec3 d) {
     float v = kerr_v(vth);
     float u = (psi + 3.14159265358979) / 6.28318530717959;
     vec2 uv = vec2(u, v);
+    lens_dtet = vec3(dr, dt, dp); lens_uv = uv;
     vec4 t = texture2D(kerr_table, uv);
     // the direction is zero in the shadow, so its blended length is the sky's share of the pixel
     float ws = length(t.xyz);
@@ -512,6 +567,7 @@ vec3 kerr_source(vec3 d) {
         lens_gdisc = q.a;
         lens_disc_u = atan(q.b, q.g) / 6.28318530717959;
     }
+    lens_hit = texture2D(kerr_hit, uv).xyz;
     if (ws <= 1e-4) return d;
     vec3 qd = t.xyz / ws;
     return normalize(qd.x*kerr_bx + qd.y*kerr_by + qd.z*kerr_bz);

@@ -864,6 +864,7 @@ class Lensing(object):
             glUniform1i(glGetUniformLocation(program, "lens_ray"), table_unit + 3)
             glUniform1i(glGetUniformLocation(program, "kerr_table"), table_unit + 4)
             glUniform1i(glGetUniformLocation(program, "kerr_disc"), table_unit + 5)
+            glUniform1i(glGetUniformLocation(program, "kerr_hit"), table_unit + 6)
             glUniform1f(glGetUniformLocation(program, "lens_branch"), 0.0)
         kloc = glGetUniformLocation(program, "lens_kerr")
         if kloc >= 0:
@@ -898,6 +899,9 @@ class Lensing(object):
         if c["kerr"] and kloc >= 0 and table_unit is not None:
             # after the build: the row window the table was traced with
             glUniform1f(glGetUniformLocation(program, "kerr_win"), cls._kerr_table.win)
+            glUniform2f(glGetUniformLocation(program, "kerr_size"), float(kerrlib.TABLE_W), float(kerrlib.TABLE_H))
+            glUniform1f(glGetUniformLocation(program, "kerr_M"), c["M"])
+            cls._kerr_table.set_trace_uniforms(program)
         glUniform1f(glGetUniformLocation(program, "lens_exact"), 1.0 if exact else 0.0)
         glUniform1f(glGetUniformLocation(program, "lens_D"), c["D"])
         glUniform1f(glGetUniformLocation(program, "lens_rs"), c["Rs"])

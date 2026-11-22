@@ -12,6 +12,7 @@ from program.const import IMG_DIR, VIEW_ANGLE
 from program import script
 from program.utils import blackbody, boost
 from program.utils.lensing import Lensing, GLSL as LENS_GLSL
+from program.utils import kerr as kerrlib
 
 
 GAME_COLOUR = """
@@ -103,6 +104,8 @@ class Sky(object):
         self.n = len(vertex)//3
         self.vertex = (GLfloat*len(vertex))(*vertex)
 
+    exact = True      # trace the band the Kerr table cannot resolve, per pixel (the main pass)
+
     def init_program(self):
         self.accurate = (BOX.COLOR_MODE == "ACCURATE")
         vs = """
@@ -156,8 +159,33 @@ class Sky(object):
         uniform sampler2D disc_tex;  // a Kerr hole's accretion disc (drawn here, from the ray table)
         uniform float kd_rin, kd_rout;   // its edges (M)
         uniform float kd_Tin, kd_bin;    // temperature and sRGB brightness at the inner edge
+        uniform float kerr_exact;        // 1: trace the band the table cannot resolve exactly, per pixel
+        uniform float kerr_debug;        // 1: show (band, sky share, disc share) instead of the colour
         float disc_logT = 0.0;
-        """ + boost.GLSL + LENS_GLSL + extra + """
+        """ + boost.GLSL + LENS_GLSL + extra + kerrlib.TRACE_GLSL + """
+        // The band the table cannot resolve: the four texels round the lookup
+        // disagree (sky against shadow, disc against not, or the crossing
+        // radius jumps, as across the thin images along the shadow's edge).
+        bool kerr_band(vec2 uv) {
+            vec2 f0 = floor(uv * kerr_size - 0.5);
+            float sky0 = 0.0, in0 = 0.0, rmin = 1.0e9, rmax = -1.0e9;
+            for (int j = 0; j < 2; j++) {
+                for (int i = 0; i < 2; i++) {
+                    vec2 c = (f0 + vec2(float(i), float(j)) + 0.5) / kerr_size;
+                    c = vec2(fract(c.x), clamp(c.y, 0.0, 1.0));
+                    float sky = (length(texture2D(kerr_table, c).xyz) > 0.5) ? 1.0 : 0.0;
+                    float rr = texture2D(kerr_disc, c).r;
+                    float ind = (kerr_rin > 0.0 && rr >= kerr_rin && rr <= kerr_rout) ? 1.0 : 0.0;
+                    if (i == 0 && j == 0) { sky0 = sky; in0 = ind; }
+                    else if (sky != sky0 || ind != in0) return true;
+                    rmin = min(rmin, rr); rmax = max(rmax, rr);
+                }
+            }
+            // a jump in the crossing radius that the interpolation would run
+            // through the disc's range (two shadow texels, one crossing the plane
+            // far out before falling in, one never: a false line of disc between)
+            return kerr_rin > 0.0 && rmax > 1.3 * rmin && rmin < kerr_rout && rmax > kerr_rin;
+        }
         vec3 doppler_T(vec3 srgb, float D, float expo, float logT0) {
             // doppler_accurate with the source temperature known per pixel
             vec3 lin = srgb_to_linear(srgb);
@@ -166,6 +194,7 @@ class Sky(object):
             return display(lin / max(p0.rgb, vec3(1e-6)) * p1.rgb * expo);
         }
         void main() {
+            gl_FragDepth = 1.0;
             vec3 d = normalize((view_i * vec4(pos, 0.0)).xyz);
             // photon direction in the background frame: Lorentz(-U) (d, -1)
             vec4 Xi = lz_neg(vec4(d, -1.0), tpv_null(d, 1.0, pb_n), pb_n, pb_u, pb_inv);
@@ -178,11 +207,43 @@ class Sky(object):
             if (lens_k > 0.0) {
                 dl0 = lens_source(dl0);    // bent round the lens
                 if (lens_kerr > 0.5) {
+                    float in_band = (kerr_exact > 0.5 && kerr_band(lens_uv)) ? 1.0 : 0.0;
+                    if (in_band > 0.5) {
+                        // this pixel's own photon, where the table's texels disagree
+                        vec3 xdir, xhit; float xinvE; vec4 xq;
+                        int st = kerr_trace(lens_dtet, xdir, xinvE, xq, xhit);
+                        lens_wsky = float(st);
+                        lens_gs = (st == 1) ? xinvE : 1.0;
+                        lens_disc_r = xq.r; lens_gdisc = xq.a;
+                        lens_disc_u = atan(xq.b, xq.g) / 6.28318530717959;
+                        lens_wdisc = (kerr_rin > 0.0 && xq.r >= kerr_rin && xq.r <= kerr_rout) ? 1.0 : 0.0;
+                        lens_hit = xhit;
+                        if (st == 1) dl0 = normalize(xdir.x*kerr_bx + xdir.y*kerr_by + xdir.z*kerr_bz);
+                    }
+                    if (lens_wdisc > 0.5 || lens_wsky <= 0.5) {
+                        // the disc and the shadow are things at a distance: their
+                        // depth, so that bodies behind them are hidden (the crossing
+                        // point, or the hole, at its true distance in the ship's frame,
+                        // as the bodies' own vertices are placed)
+                        vec3 hv = (lens_hit.x*kerr_bx + lens_hit.y*kerr_by + lens_hit.z*kerr_bz) * kerr_M;
+                        float dlab = max(length(hv), 1.0e-9);
+                        vec3 dsh = lens_to_ship(hv / dlab);
+                        float dist = dlab / max(lens_lab_dist(dsh), 1.0e-9);
+                        float ze = normalize(pos).z * dist;
+                        if (ze < 0.0) {
+                            float zc = gl_ProjectionMatrix[2][2]*ze + gl_ProjectionMatrix[3][2];
+                            gl_FragDepth = clamp(0.5*zc/(-ze) + 0.5, 0.0, 1.0);
+                        }
+                    }
+                    if (kerr_debug > 0.5) { gl_FragColor = vec4(in_band, lens_wsky, lens_wdisc, 1.0); return; }
                     if (lens_wsky <= 0.0 && lens_wdisc <= 0.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
                     ratio = ratio0 * lens_gs;     // the table's per-direction frequency factor (the observer's included)
                     if (kd_rin > 0.0) {
-                        // the disc's edges a pixel wide, wherever they fall between texels
-                        float fw = max(fwidth(lens_disc_r), 1e-6);
+                        // the disc's edges a pixel wide, wherever they fall between texels;
+                        // the ramp's width is capped, so that a jump to a texel that
+                        // never crossed the plane (a sentinel radius) is a hard cut,
+                        // not a faint fringe of disc along the whole boundary
+                        float fw = clamp(fwidth(lens_disc_r), 1e-6, 0.125 * (kd_rout - kd_rin));
                         lens_wdisc = clamp((lens_disc_r - kd_rin) / fw + 0.5, 0.0, 1.0) * clamp((kd_rout - lens_disc_r) / fw + 0.5, 0.0, 1.0);
                         lens_disc_r = clamp(lens_disc_r, kd_rin, kd_rout);
                     }
@@ -229,6 +290,8 @@ class Sky(object):
         }
         """)
         self.view_local = glGetUniformLocation(self.program, "view_i")
+        self.exact_local = glGetUniformLocation(self.program, "kerr_exact")
+        self.debug_local = glGetUniformLocation(self.program, "kerr_debug")
         self.skyp_local = glGetUniformLocation(self.program, "sky_p")
         self.skyR_local = glGetUniformLocation(self.program, "sky_R")
         self.gobs_local = glGetUniformLocation(self.program, "g_obs")
@@ -268,9 +331,11 @@ class Sky(object):
         glActiveTexture(GL_TEXTURE3)
         glBindTexture(GL_TEXTURE_2D, self.texture_id_deep)
         glUniform1i(self.texdeep_local, 3)
-        glActiveTexture(GL_TEXTURE10)          # 8 and 9 hold the Kerr tables
+        glActiveTexture(GL_TEXTURE11)          # 8, 9 and 10 hold the Kerr tables
         glBindTexture(GL_TEXTURE_2D, self.texture_id_disc)
-        glUniform1i(self.texdisc_local, 10)
+        glUniform1i(self.texdisc_local, 11)
+        glUniform1f(self.exact_local, 1.0 if (scale == 1.0 and self.exact) else 0.0)
+        glUniform1f(self.debug_local, 1.0 if getattr(self, 'debug', False) else 0.0)
         if player_rel is None:
             glUniform3f(self.skyp_local, 0.0, 0.0, 0.0)
         else:

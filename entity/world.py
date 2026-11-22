@@ -395,7 +395,13 @@ class World(object):
             Lensing.set_current(lens, Xc, Xp, self.player.P.U)
         else:
             Lensing.set_current(None, None, None, None)
-        glDepthMask(GL_FALSE)
+        # a Kerr hole's sky carries its disc and shadow with their depths,
+        # so that bodies behind them are hidden: let it write them
+        kerr_depth = bool(Lensing.current is not None and Lensing.current.get("kerr"))
+        if kerr_depth:
+            glEnable(GL_DEPTH_TEST); glDepthFunc(GL_ALWAYS); glDepthMask(GL_TRUE)
+        else:
+            glDepthMask(GL_FALSE)
         if not getattr(self, "_sky_checked", False):
             self._sky_checked = True
             from program.utils.shader import gl_log
@@ -406,6 +412,8 @@ class World(object):
             self._sky_checked = "done"
             from program.utils.shader import gl_log
             gl_log("after sky: glGetError %d, lens %s" % (glGetError(), Lensing.current is not None))
+        if kerr_depth:
+            glDepthFunc(GL_LESS); glDisable(GL_DEPTH_TEST)
         glDepthMask(GL_TRUE)
         if BOX.MARKERS:
             self.axes.draw(L, matrix_i)
