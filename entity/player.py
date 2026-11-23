@@ -240,7 +240,8 @@ class Player(object):
             # static-frame orbital speed v = sqrt(GM/(r - R_s)) (exact for
             # Schwarzschild; sqrt(GM/r) far out), no orbit inside r = 3GM;
             # at a Kerr hole the ZAMO-relative speed of the constant-r orbit
-            # through here (spherical off the equator), down to its ISCO.
+            # through here (spherical off the equator), down to the photon
+            # orbit; inside the ISCO it is unstable and held only by thrust.
             body = self.world.solar.dominant(self.P.X)
             if body is not None and body.GM > 0.0:
                 lo = self.Xlo
@@ -260,7 +261,7 @@ class Player(object):
                     if body.is_kerr:
                         # the constant-r orbit through here in the direction t:
                         # circular on the equator, spherical off it; when there
-                        # is none (or no stable one) that way round, the other
+                        # is none that way round, the other
                         sp = kerrlib.spherical(body.kerr_basis, (dx, dy, dz))
                         _, th, _, _, _, ep = sp
                         dph = tx*ep[0] + ty*ep[1] + tz*ep[2]

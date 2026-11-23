@@ -100,7 +100,9 @@ def spherical_speed(M, a, r, th, dph):
     momentum the radial force depends only on E and L (ship_step's dGr),
     so the speed is the root of that force in v, found by bisection; the
     polar motion (the Carter constant) does not enter.  None where there
-    is no such orbit or it is unstable."""
+    is no such orbit: inside the ISCO the orbit is unstable (the ship's
+    thrust can hold it; let go and it decays), inside the photon orbit
+    there is none."""
     al, om, vp, S, D = zamo(M, a, r, th)
     a2 = a*a
     def EL(v):
@@ -130,11 +132,7 @@ def spherical_speed(M, a, r, th, dph):
                     hi = mid
                 else:
                     lo = mid
-            v = 0.5*(lo + hi)
-            E, L = EL(v)
-            h = 1.0e-4 * r
-            stable = force(r + h, E, L) < force(r - h, E, L)
-            return v if stable else None
+            return 0.5*(lo + hi)
         v0, f0 = v1, f1
     return None
 
