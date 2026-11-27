@@ -55,9 +55,30 @@ uniform float lens_rs;           // the hole's Schwarzschild radius, same units
 uniform float lens_rhomax;       // the table's largest rho over R_s (log grid from R_s)
 uniform float lens_rhon;         // rows of the 2-D table (texel centres at (j + 0.5)/rows)
 uniform float lens_finite;       // 1: the 2-D table is bound
+// the 2-D table holds -1 where a leg does not reach radius rho (rows beyond
+// the ship's radius have no inbound leg at all), and the hardware's bilinear
+// blend of a valid row with a -1 row is a small positive nonsense: so the two
+// rows about v are read at their centres and blended by hand, per channel,
+// taking the one valid value where the other is -1
+vec4 lens_rowtex(float th, float j) {
+    return texture2D(lens_ray, vec2(th * 0.31830988618379067, (clamp(j, 0.0, lens_rhon - 1.0) + 0.5) / lens_rhon));
+}
+float lens_mixvalid(float a, float b, float f) {
+    return (a < 0.0) ? b : ((b < 0.0) ? a : mix(a, b, f));
+}
 // the sweep of the ray at view angle th when it reaches radius rho (0 < v < 1 along the log-rho grid)
 vec2 lens_sweep(float th, float v) {
-    return texture2D(lens_ray, vec2(th * 0.31830988618379067, v)).rg;
+    float y = v * lens_rhon - 0.5;
+    float j0 = floor(y); float f = y - j0;
+    vec4 a = lens_rowtex(th, j0), b = lens_rowtex(th, j0 + 1.0);
+    return vec2(lens_mixvalid(a.r, b.r, f), lens_mixvalid(a.g, b.g, f));
+}
+// the row constants (the legs' domains in th): defined only where both rows have them
+vec4 lens_row(float v) {
+    float y = v * lens_rhon - 0.5;
+    float j0 = floor(y); float f = y - j0;
+    vec4 a = lens_rowtex(0.5 * 3.14159265358979, j0), b = lens_rowtex(0.5 * 3.14159265358979, j0 + 1.0);
+    return vec4(0.0, 0.0, (a.b < 0.0 || b.b < 0.0) ? -1.0 : mix(a.b, b.b, f), (a.a < 0.0 || b.a < 0.0) ? -1.0 : mix(a.a, b.a, f));
 }
 // view angle th of the image of a source at radius rho (log-grid coordinate v)
 // and sweep angle target, on leg 0 (inbound, sweep rising with th, defined
@@ -66,7 +87,7 @@ vec2 lens_sweep(float th, float v) {
 // that domain.  -1 when the target lies outside the leg's range; with edge,
 // leg 0 returns its tangent end when the target lies beyond it.
 float lens_solve(int leg, float v, float target, bool edge) {
-    vec4 row = texture2D(lens_ray, vec2(0.5, v));
+    vec4 row = lens_row(v);
     float lo, hi;
     if (leg == 0) {
         if (row.b < 0.0) return -1.0;
@@ -172,7 +193,7 @@ vec3 lens_apparent_near(vec3 p, float branch) {
             // tangent ray, where the sweep runs as the square root of the
             // distance to it (inbound below, outbound above): a parabola in
             // th through both ends rather than a jump
-            vec4 row = texture2D(lens_ray, vec2(0.5, v));
+            vec4 row = lens_row(v);
             if (row.b > 0.0) {
                 vec2 sB = lens_sweep(row.b, v);
                 if (sB.r >= 0.0 && sB.g >= 0.0 && psi >= sB.r && psi <= sB.g) {
@@ -673,7 +694,10 @@ class Lensing(object):
         v = math.log(r / Rs) / math.log(RHO_MAX) * (NR - 1)
         j = max(0, min(NR - 2, int(v))); f = v - j
         def row(arr):
-            return arr[:, j]*(1.0 - f) + arr[:, j + 1]*f
+            a, b = arr[:, j], arr[:, j + 1]
+            out = a*(1.0 - f) + b*f
+            out = np.where(a < 0.0, b, out)
+            return np.where(b < 0.0, a, out)
         th = np.pi*(np.arange(N) + 0.5)/N
         def solve(col, target):
             ok = col >= 0.0
