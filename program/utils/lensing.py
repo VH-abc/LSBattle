@@ -231,6 +231,45 @@ vec3 lens_apparent_near_table(vec3 p, float branch) {
     if (th < 0.0) return vec3(0.0);
     return lens_h*cos(th) - e*sin(th);
 }
+// the great-circle interpolation from a to b by w
+vec3 lens_slerp(vec3 a, vec3 b, float w) {
+    float ca = clamp(dot(a, b), -1.0, 1.0);
+    float ang = acos(ca);
+    if (ang < 1e-4) return b;
+    return normalize((sin((1.0 - w)*ang) * a + sin(w*ang) * b) / sin(ang));
+}
+// the inverse of kerr_source for a far source at direction d: Newton's
+// method on the sphere from the guess v0, the Jacobian by differences of
+// the table (least squares in the tangent plane).  Where the guess looks
+// into the shadow the guess is returned.
+vec3 kerr_apparent(vec3 d, vec3 v0) {
+    vec3 v = normalize(v0);
+    vec3 best = v;
+    float bestr = 1.0e9;
+    float eps = 5.0e-4;
+    for (int i = 0; i < 10; i++) {
+        vec3 s0 = kerr_source(v);
+        if (lens_wsky < 0.5) break;
+        vec3 r = d - s0;
+        float rr = dot(r, r);
+        if (rr < bestr) { bestr = rr; best = v; }
+        if (rr < 1.0e-10) break;
+        vec3 t1 = normalize(cross(v, (abs(v.x) < 0.9) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
+        vec3 t2 = cross(v, t1);
+        vec3 j1 = (kerr_source(normalize(v + eps*t1)) - s0) / eps;
+        vec3 j2 = (kerr_source(normalize(v + eps*t2)) - s0) / eps;
+        float a = dot(j1, j1), b = dot(j1, j2), c = dot(j2, j2);
+        float det = a*c - b*b;
+        if (det < 1.0e-12) break;
+        float r1 = dot(j1, r), r2 = dot(j2, r);
+        float x1 = (c*r1 - b*r2) / det, x2 = (a*r2 - b*r1) / det;
+        float step = length(vec2(x1, x2));
+        if (step > 0.5) { x1 *= 0.5/step; x2 *= 0.5/step; }     // never a leap across the hole
+        v = normalize(v + x1*t1 + x2*t2);
+    }
+    kerr_source(best);                    // the globals (sky share) for it
+    return best;                          // the best seen: never worse than the guess
+}
 // where a source at background-frame direction d appears (primary image),
 // for a source that sees the fraction w of the deflection
 vec3 lens_apparent(vec3 d, float w) {
@@ -256,6 +295,14 @@ vec3 lens_apparent(vec3 d, float w) {
             return lens_h*cos(th2) - e*sin(th2);
         }
         float thx = texture1D(lens_tinv, beta * 0.31830988618379067).r;
+        if (lens_kerr > 0.5) {
+            // a spinning hole drags the image round: the view direction
+            // whose Kerr ray reaches the source, from the Schwarzschild
+            // image as the first guess
+            vec3 v = kerr_apparent(d, lens_h*cos(thx) + e*sin(thx));
+            if (w >= 1.0) return v;
+            return lens_slerp(d, v, w);
+        }
         float thw = beta + (thx - beta) * w;
         return lens_h*cos(thw) + e*sin(thw);
     }
