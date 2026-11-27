@@ -173,7 +173,27 @@ vec3 lens_source(vec3 d) {
 // leg if there is one, else the outbound; secondary (branch 1) round the far
 // side.  Returns the image direction, or the zero vector when the 2-D
 // table has nothing (the caller then falls back).
+// A source close to the ship (within a few tenths of the hole's distance)
+// is beyond the table's resolution: its rho is the ship's own row and its
+// psi a fraction of a texel.  Light over that short a path is bent by the
+// local field alone: the chord turned away from the hole by half the
+// deflection along it, M d sin(a) / D^2 (first order; the table takes over
+// smoothly between 0.15 and 0.4 of D).
+vec3 lens_apparent_near_table(vec3 p, float branch);
+vec3 lens_near_local(vec3 dl, float d) {
+    return normalize(dl - 0.5 * lens_k * (d / lens_D) * (lens_h - dot(lens_h, dl) * dl));
+}
 vec3 lens_apparent_near(vec3 p, float branch) {
+    float d = length(p);
+    float x = d / lens_D;
+    if (x < 0.15) return (branch < 0.5) ? lens_near_local(p / d, d) : vec3(0.0);
+    vec3 img = lens_apparent_near_table(p, branch);
+    if (x < 0.4 && branch < 0.5 && dot(img, img) > 0.5) {
+        img = normalize(mix(lens_near_local(p / d, d), img, smoothstep(0.15, 0.4, x)));
+    }
+    return img;
+}
+vec3 lens_apparent_near_table(vec3 p, float branch) {
     vec3 q = p - lens_D * lens_h;               // source relative to the hole
     float rho = length(q);
     if (rho <= lens_rs || rho >= lens_rs * lens_rhomax) return vec3(0.0);
@@ -676,6 +696,34 @@ class Lensing(object):
         c = cls.current
         if c is None or cls._ray_rows is None:
             return None
+        import numpy as np
+        phi_in, phi_out, rho = cls._ray_rows
+        hx, hy, hz = c["h"]; D = c["D"]; Rs = c["Rs"]
+        # close to the ship: the local bend (as the shader's lens_near_local),
+        # blended into the table's image between 0.15 and 0.4 of D
+        d = (p[0]*p[0] + p[1]*p[1] + p[2]*p[2]) ** 0.5
+        x = d / D
+        if x < 0.4 and d > 0.0:
+            dl = (p[0]/d, p[1]/d, p[2]/d)
+            hd = hx*dl[0] + hy*dl[1] + hz*dl[2]
+            k = 0.5 * (Rs / D) * x
+            loc = (dl[0] - k*(hx - hd*dl[0]), dl[1] - k*(hy - hd*dl[1]), dl[2] - k*(hz - hd*dl[2]))
+            n = (loc[0]**2 + loc[1]**2 + loc[2]**2) ** 0.5
+            loc = (loc[0]/n, loc[1]/n, loc[2]/n)
+            if x < 0.15:
+                return loc if branch == 0 else None
+            img = cls._image_near_table(p, branch)
+            if branch != 0 or img is None:
+                return img
+            t = (x - 0.15) / 0.25; f = t*t*(3.0 - 2.0*t)
+            m = tuple(a*(1.0 - f) + b*f for a, b in zip(loc, img))
+            n = (m[0]**2 + m[1]**2 + m[2]**2) ** 0.5
+            return (m[0]/n, m[1]/n, m[2]/n)
+        return cls._image_near_table(p, branch)
+
+    @classmethod
+    def _image_near_table(cls, p, branch=0):
+        c = cls.current
         import numpy as np
         phi_in, phi_out, rho = cls._ray_rows
         hx, hy, hz = c["h"]; D = c["D"]; Rs = c["Rs"]
